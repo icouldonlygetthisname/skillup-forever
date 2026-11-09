@@ -130,8 +130,10 @@ local STALE = {
 	bags = { tooltipRouteTools = true, api = true, route = true, tracker = true, shoppingList = true },
 	-- Item data arrived; `names` when the public list was waiting on it. An item tooltip's lines hold no item
 	-- name, and a route's tooltip lines hold no shopping source, so `tooltipCache` and `tooltipRoute` stay.
+	-- `trackedNeeds` stays too: its shopping sources come from the price cache, which item data does not drop.
+	-- Item info a price waited on reports `prices` (Integrations/Prices.lua), and that drops it. Bag addons load
+	-- item data constantly, and every rebuild re-ran RouteReagents for each tracked route (50-80 ms frames, #412).
 	items = {
-		trackedNeeds = true,
 		route = true,
 		tracker = true,
 		gear = true,
