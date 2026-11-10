@@ -91,10 +91,10 @@ equal(#ns.PlanRoute(Tailoring()).crafts > 0, true, "the plan under test has craf
 equal(Stale(function() end), " | ", "nothing changes on its own")
 
 -- The public list was built without the reagent's name, so item data arriving rebuilds it once.
-equal(Stale(Event("ITEM_DATA_LOAD_RESULT")), "api | route tracker", "item data the public list waited on")
+equal(Stale(Event("ITEM_DATA_LOAD_RESULT")), "api | route", "item data the public list waited on")
 c.items[CLOTH] = { name = "Linen Cloth" }
 c.Fire("BAG_UPDATE_DELAYED")
-equal(Stale(Event("ITEM_DATA_LOAD_RESULT")), " | route tracker", "item data nothing waited on")
+equal(Stale(Event("ITEM_DATA_LOAD_RESULT")), " | route", "item data nothing waited on")
 
 for _, case in ipairs({
 	-- The window's own events redraw what shows it and keep the plans: its scan reports what changed in them.
@@ -179,6 +179,26 @@ local function HalfASecond()
 end
 equal(Stale(HalfASecond), "prices plans api | route recipeList tracker", "it waits out the burst, then prices changed")
 equal(Stale(HalfASecond), " | ", "once")
+
+-- #503: item data arrives for any item, from any addon, so it must not drop the tracked routes' material
+-- lists. The one item-data input those lists read, a vendor sell price, reports `prices` when it arrives.
+ns.SetTracked(197, true)
+local realReagents = ns.RouteReagents
+local reagentBuilds = 0
+ns.RouteReagents = function(plan, ...)
+	reagentBuilds = reagentBuilds + 1
+	return realReagents(plan, ...)
+end
+local tracked = ns.TrackedNeeds()
+equal(reagentBuilds > 0, true, "the tracked route starts built")
+reagentBuilds = 0
+c.Fire("ITEM_DATA_LOAD_RESULT", 9999, true)
+equal(ns.TrackedNeeds(), tracked, "item data for an unrelated item leaves the tracked routes as they are")
+equal(reagentBuilds, 0, "and rebuilds no route's material list")
+ns.Changed("prices")
+equal(ns.TrackedNeeds() ~= tracked, true, "a price change still rebuilds the tracked routes")
+equal(reagentBuilds > 0, true, "from their material lists")
+ns.RouteReagents = realReagents
 
 -- What the writers report.
 equal(Stale(c.AuctionatorScan), "prices plans api | route recipeList tracker", "an Auctionator scan")

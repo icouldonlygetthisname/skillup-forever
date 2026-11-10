@@ -174,6 +174,8 @@ local OPTIONAL_GLOBALS = {
 	AtlasLoot = true,
 	-- Auctionator: its addon table, present only when Auctionator is installed and enabled.
 	Auctionator = true,
+	-- TradeSkillMaster: its public API table, present only when TSM is installed and enabled.
+	TSM_API = true,
 	-- TomTom: its addon table, present only when TomTom is installed and enabled.
 	TomTom = true,
 	-- Shortest Path Forever: its addon table, present only when that Forever addon is installed.
@@ -1135,6 +1137,19 @@ function Client.load(options)
 			},
 		}
 	end
+	-- options.tsm = { [itemID] = copper }, what TSM's AuctionDB holds; a spec may change it through c.tsm.
+	c.tsm = options.tsm
+	if options.tsm then
+		G.TSM_API = {
+			GetCustomPriceValue = function(_, itemString)
+				local copper = c.tsm[tonumber(itemString:match("^i:(%d+)$"))]
+				if copper then
+					return copper
+				end
+				return nil, "no value"
+			end,
+		}
+	end
 	-- Auctionator finished a scan: its prices are now what c.auction holds.
 	function c.AuctionatorScan()
 		for _, fn in ipairs(scanned) do
@@ -1245,8 +1260,28 @@ function Client.load(options)
 			settings[variable]:SetValue(value)
 		end,
 		NotifyUpdate = noop,
-		OpenToCategory = noop,
+		-- Blizzard's own wrapper runs the restricted client opener in the addon's taint, which the client refuses
+		-- and blames on the addon (cjber/forever-core#333); the addon asks the shared secure opener instead.
+		OpenToCategory = function()
+			error("Settings.OpenToCategory called straight from addon code")
+		end,
 	}
+	-- The client's own restricted settings opener, reached through Core/OpenSettings.lua's secure delegate.
+	G.C_SettingsUtil = {
+		OpenSettingsPanel = function(categoryID, element)
+			c.settingsOpened = categoryID
+			c.settingsElement = element
+			c.settingsOpens = (c.settingsOpens or 0) + 1
+		end,
+	}
+	-- CreateSecureDelegate wraps a Lua function so a call from addon code runs as the client: count the calls so a
+	-- spec can tell the shared opener from the restricted function run directly.
+	G.CreateSecureDelegate = function(fn)
+		return function(...)
+			c.secureSettingsCalls = (c.secureSettingsCalls or 0) + 1
+			return fn(...) -- multi-value: the wrapped client function's results pass through
+		end
+	end
 	G.CreateSettingsButtonInitializer = noop
 	G.MinimalSliderWithSteppersMixin = { Label = { Right = 1 } }
 	-- The player changing one of the addon's settings in the options panel.

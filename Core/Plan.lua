@@ -404,6 +404,25 @@ function ns.LearnSkill(profession, recipeID)
 	return 0
 end
 
+-- A recipe's thresholds with the range starting where it can first be learned, which is the start a player
+-- sees: the client leaves most recipe starts at its placeholder 1 (#519). The bands above the start stay as the
+-- bundle has them, and the same table comes back when the data already starts there or nothing places the recipe.
+---@param profession SkillUpContext?
+---@param recipeID integer
+---@param thresholds number[]?
+---@return number[]?
+function ns.RangeThresholds(profession, recipeID, thresholds)
+	local t = thresholds or ns.Model.Get(recipeID)
+	if not t or not profession then
+		return t
+	end
+	local learnAt = ns.LearnSkill(profession, recipeID)
+	if learnAt <= t[1] then
+		return t
+	end
+	return { learnAt, t[2], t[3], t[4] }
+end
+
 -- The recipes of this profession the character has not learned that the bundle can place: a trainer's
 -- or a recipe item's, with the skill each asks. Sorted by that skill, so the ones this character can
 -- learn now come first, then what is still ahead; a trainer's before a recipe item's at the same skill.
@@ -857,9 +876,12 @@ function ns.RouteBlocked(plan)
 	elseif plan.profession.capped and #plan.ranks == 0 then
 		return string.format(L["At the %d cap: no trainer teaches the next rank."], plan.profession.max)
 	elseif plan.unpriced > 0 then
-		-- Auctionator knows only what it has scanned, so installing it isn't enough.
-		local without = L["These reagents have no vendor price. Auction prices need Auctionator."]
+		-- An auction addon knows only what it has scanned, so installing it isn't enough.
+		local without = L["These reagents have no vendor price. Auction prices need Auctionator or TradeSkillMaster."]
 		local with = L["Auctionator hasn't seen these reagents yet: scan the auction house with it to price them."]
+		if ns.HasTradeSkillMaster() and not ns.HasAuctionator() then
+			return L["TradeSkillMaster has no price for these reagents: update its AuctionDB with the TSM desktop app."]
+		end
 		return ns.HasAuctionator() and with or without
 	elseif plan.stopReason == "no_recipe" then
 		return string.format(L["Nothing you know skills up past %d."], plan.reached)

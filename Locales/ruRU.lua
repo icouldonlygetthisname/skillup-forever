@@ -33,8 +33,8 @@ L["/su unskip <recipe ID> shows one again, /su unskip all every one."] =
 	"/su unskip <recipe ID> возвращает один рецепт, /su unskip all — все."
 L["A Reagents tab on a merchant's window that lists the reagents your tracked routes still need from that merchant and their total cost. Buy them from the merchant's own window."] =
 	"Вкладка «Реагенты» в окне торговца со списком реагентов, которые ещё нужны вашим отслеживаемым маршрутам у этого торговца, и их общей стоимостью. Покупайте их в окне торговца."
-L["A material your professions gather costs what selling it would bring instead of nothing: its auction price after the 5% cut, or its vendor sell price if that is more. Used for the route and the costs on recipe rows. Auction prices need Auctionator."] =
-	"Материал, который добывают ваши профессии, стоит столько, сколько принесла бы его продажа, а не ноль: цена на аукционе за вычетом 5% комиссии или цена продажи торговцу, если она выше. Учитывается в маршруте и стоимости в строках рецептов. Для цен аукциона нужен Auctionator."
+L["A material your professions gather costs what selling it would bring instead of nothing: its auction price after the 5% cut, or its vendor sell price if that is more. Used for the route and the costs on recipe rows. Auction prices need Auctionator or TradeSkillMaster."] =
+	"Материал, который добывают ваши профессии, стоит столько, сколько принесла бы его продажа, а не ноль: цена на аукционе за вычетом 5% комиссии или цена продажи торговцу, если она выше. Учитывается в маршруте и стоимости в строках рецептов. Для цен аукциона нужен Auctionator/TradeSkillMaster."
 L["Keeps the shared Forever tracker where you put it. The grip at its top no longer drags it."] =
 	"Оставляет общий трекер Forever там, где вы его поставили. Ручка сверху больше его не перетаскивает."
 L["Lock the tracker"] = "Закрепить трекер"
@@ -123,6 +123,7 @@ L["Have (bags and bank)"] = "Есть (сумки и банк)"
 L["Head"] = "Голова"
 L["Herb and ore node tooltips show the skill they need and its colour at yours (English client only). Skinnable corpses show ? until the skinning rule is confirmed on Forever."] =
 	"Подсказки трав и рудных жил показывают нужный навык и его цвет для вашего (только английский клиент). Для свежуемых трупов показывается ?, пока правило снятия шкур не подтверждено на Forever."
+L["Hide this section"] = "Скрыть этот раздел"
 L["Install AtlasLoot to see the recipes vendors, quests and drops would add."] =
 	"Установите AtlasLoot, чтобы видеть рецепты от торговцев, заданий и добычи."
 L["Install Questie and AtlasLoot to see where recipes, vendors and trainers are."] =
@@ -211,8 +212,8 @@ L["Read %s at %d"] = "Прочитать %s на %d"
 L["Read %s at %d (level %d)"] = "Прочитать %s на %d (уровень %d)"
 L["Read %s first: you're at your cap."] =
 	"Сначала прочитайте %s: вы достигли предела."
-L["Reagent cost divided by skill-up chance, on recipe rows and in the tooltip. Common vendor reagents are priced from the start and updated at merchants you visit, reagents you gather are free unless you value them under Prices, and auction prices need Auctionator."] =
-	"Стоимость реагентов, деленная на шанс повышения навыка, в строках рецептов и в подсказке. Обычные реагенты торговцев имеют цену сразу и обновляются у посещенных торговцев; добываемые вами реагенты бесплатны, если не задать им цену в разделе «Цены»; для цен аукциона нужен Auctionator."
+L["Reagent cost divided by skill-up chance, on recipe rows and in the tooltip. Common vendor reagents are priced from the start and updated at merchants you visit, reagents you gather are free unless you value them under Prices, and auction prices need Auctionator or TradeSkillMaster."] =
+	"Стоимость реагентов, деленная на шанс повышения навыка, в строках рецептов и в подсказке. Обычные реагенты торговцев имеют цену сразу и обновляются у посещенных торговцев; добываемые вами реагенты бесплатны, если не задать им цену в разделе «Цены»; для цен аукциона нужен Auctionator/TradeSkillMaster."
 L["Reagent tooltips"] = "Подсказки реагентов"
 L["Reagents"] = "Реагенты"
 L["Reagents  (have / need)"] = "Реагенты  (есть / нужно)"
@@ -279,8 +280,8 @@ L["Sort recipes in one list, learned first, then unlearned. Default restores cat
 L["Source"] = "Источник"
 L["Source unknown"] = "Источник неизвестен"
 L["Stop tracking"] = "Не отслеживать"
-L["Subtract what the crafted item sells for from its cost. Auction prices need Auctionator, are after the 5% cut, and may not sell."] =
-	"Вычитает из стоимости цену продажи созданного предмета. Для цен аукциона нужен Auctionator, они указаны за вычетом 5% комиссии, и предмет может не продаться."
+L["Subtract what the crafted item sells for from its cost. Auction prices need Auctionator or TradeSkillMaster, are after the 5% cut, and may not sell."] =
+	"Вычитает из стоимости цену продажи созданного предмета. Для цен аукциона нужен Auctionator/TradeSkillMaster, они указаны за вычетом 5% комиссии, и предмет может не продаться."
 L["Suggest my other Forever addons"] = "Предлагать другие мои модификации Forever"
 L["Taught by %s trainers."] = "Обучают учителя (%s)."
 L["The Forever addons are free, with nothing locked behind them. If they help, you can buy me a coffee."] =
@@ -298,8 +299,8 @@ L["The text is selected. Press Ctrl+C (Cmd+C on a Mac) to copy it, then paste it
 	"Текст выделен. Нажмите Ctrl+C (Cmd+C на Mac), чтобы скопировать его, и вставьте в сообщение об ошибке."
 L["The tracker is locked. Turn off Lock the tracker to move it."] =
 	"Трекер закреплён. Отключите «Закрепить трекер», чтобы переместить его."
-L["These reagents have no vendor price. Auction prices need Auctionator."] =
-	"У этих реагентов нет цены у торговца. Для цен аукциона нужен Auctionator."
+L["These reagents have no vendor price. Auction prices need Auctionator or TradeSkillMaster."] =
+	"У этих реагентов нет цены у торговца. Для цен аукциона нужен Auctionator/TradeSkillMaster."
 L["This addon"] = "Эта модификация"
 L["To buy"] = "К покупке"
 L["Tool"] = "Инструмент"
@@ -323,8 +324,8 @@ L["Value gathered materials at what they'd sell for"] =
 L["Vendor"] = "Торговец"
 L["Vendor reagents"] = "Реагенты торговцев"
 L["Vendor sell price"] = "Цена продажи торговцу"
-L["Visit a vendor to price reagents. Auction prices need Auctionator."] =
-	"Посетите торговца, чтобы узнать цены реагентов. Для цен аукциона нужен Auctionator."
+L["Visit a vendor to price reagents. Auction prices need Auctionator or TradeSkillMaster."] =
+	"Посетите торговца, чтобы узнать цены реагентов. Для цен аукциона нужен Auctionator/TradeSkillMaster."
 L["Waist"] = "Пояс"
 L["Waypoint to a trainer"] = "Точка маршрута к учителю"
 L["Waypoint to a vendor: %s"] = "Точка маршрута к торговцу: %s"
@@ -548,8 +549,8 @@ L["Sells %d at a time"] = "Продаёт по %d за раз" -- mt
 L["This route is mostly %s: %d recipes are left out until their reagents are priced."] =
 	"Этот маршрут в основном %s: рецептов %d остаются исключенными, пока у их реагентов нет цены." -- mt
 L["Price self-supplied reagents at auction values"] = "Price self-supplied reagents at auction values" -- mt
-L["A reagent you gather, loot or already own costs what selling it would bring - its auction price after the 5% cut, or its vendor sell price if that is more - instead of counting as free. With no market price it stays unpriced rather than free. Auction prices need Auctionator."] =
-	"A reagent you gather, loot or already own costs what selling it would bring - its auction price after the 5% cut, or its vendor sell price if that is more - instead of counting as free. With no market price it stays unpriced rather than free. Auction prices need Auctionator." -- mt
+L["A reagent you gather, loot or already own costs what selling it would bring - its auction price after the 5% cut, or its vendor sell price if that is more - instead of counting as free. With no market price it stays unpriced rather than free. Auction prices need Auctionator or TradeSkillMaster."] =
+	"A reagent you gather, loot or already own costs what selling it would bring - its auction price after the 5% cut, or its vendor sell price if that is more - instead of counting as free. With no market price it stays unpriced rather than free. Auction prices need Auctionator/TradeSkillMaster." -- mt
 
 -- Shared debug log (Forever Core's Core/Log.lua).
 L["Debug log is off."] = "Журнал отладки выключен."
@@ -576,8 +577,6 @@ L["%s: %s"] = "%s: %s" -- mt
 L["%s drops in %s"] = "%s выпадает в %s" -- mt
 L["Made by %s %d"] = "Изготовлено: %s %d" -- mt
 L["Made by %s"] = "Изготовлено: %s" -- mt
-L["Tailoring and First Aid have a route without Auctionator."] =
-	"У портняжного дела и первой помощи есть маршрут без Auctionator." -- mt
 L["%s at %d"] = "%s на %d" -- mt
 L["A tab at the bottom of the Professions window listing the buff consumables this profession makes, by the skill they unlock at and what each one is for. It opens from the SkillUp side tab, beside the route and crafted gear tabs."] =
 	"Вкладка внизу окна профессий со списком усиливающих расходников этой профессии, по навыку, на котором они открываются, и их назначению. Открывается с боковой вкладки SkillUp, рядом с вкладками маршрута и изготовленной экипировки." -- mt
@@ -603,3 +602,11 @@ L["Skill  %d/%d"] = "Навык  %d/%d" -- mt
 L["Other crafters"] = "Другие ремесленники" -- mt
 L["No profession here makes buff items."] =
 	"Ни одна профессия не создаёт предметы усиления." -- mt
+L["Latest TradeSkillMaster prices."] = "Последние цены TradeSkillMaster." -- mt
+L["TradeSkillMaster"] = "TradeSkillMaster" -- mt
+L["TradeSkillMaster has no price for these reagents: update its AuctionDB with the TSM desktop app."] =
+	"У TradeSkillMaster нет цены на эти реагенты: обновите его AuctionDB через приложение TSM для компьютера." -- mt
+L["Update TradeSkillMaster's AuctionDB with the TSM desktop app, or visit a vendor, to price reagents."] =
+	"Обновите AuctionDB TradeSkillMaster через приложение TSM для компьютера или посетите торговца, чтобы оценить реагенты." -- mt
+L["The tracker no longer flashes while you hover equippable items."] =
+	"Список задач больше не мерцает при наведении на надеваемые предметы." -- mt

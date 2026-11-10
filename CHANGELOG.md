@@ -12,7 +12,33 @@ optional `### For addon authors` subsection after a version's player bullets.
 
 ## [Unreleased]
 
+
+## [1.3.5] - 2026-11-10
+
+- **The tracker no longer flashes while you hover equippable items.** An item's tooltip and its comparison tooltips were making the tracked reagents section redraw for item details it does not show. It now draws again only when a reagent or book it lists arrives. Thanks to hardliquor on Discord for the report (#526).
+
+## [1.3.4] - 2026-11-10
+
+- **Opening SkillUp's options no longer shows a blocked action error.** The Open buttons on the options index, `/skillup` and the addon compartment entry now ask the game to open its options instead of opening them themselves, so the client does not refuse the request and blame SkillUp Forever (cjber/forever-core#333).
+
+## [1.3.3] - 2026-11-10
+
+- **Recipe skill ranges start where you learn the recipe.** *Newest recipes first* now sorts correctly too. The client leaves most recipes' first threshold at 1, so the tooltip, its bar, the recipe rows and the sort all took 1 as the range start: Dark Leather Belt said "Skill range starts at 1" although its trainer asks 100, and recipes learned later sorted as if they were learned first. The start now comes from the trainer or recipe item that teaches the recipe, so 406 recipes show the skill you learn them at; a recipe learned at 1, or one the bundle has no source for, keeps the client's number. Thanks to cotijelucie on Discord for the report (#519).
+
+## [1.3.2] - 2026-11-10
+
+- **No more blocked actions in combat.** Hiding or showing one of SkillUp's pages while you were in combat was refused by the client, which showed up as an "action blocked" message while casting or learning a plan. The page switch now waits for combat to end, and your own tabs still update the moment you click. `/skillup` typed in combat opens the settings panel once combat ends rather than being refused.
+
+## [1.3.1] - 2026-11-10
+
+- **Auction prices can come from TradeSkillMaster.** With TradeSkillMaster installed and no Auctionator price for an item, reagents and crafted items use TSM's AuctionDB: its latest snapshot's market value, then the lowest buyout, then the 14-day market value. The desktop app refreshes that data, so TSM does not report how old a price is and no age is shown. Auctionator stays first when both are installed, and its shopping lists still need Auctionator.
+
+## [1.3.0] - 2026-11-09
 - **The recipe list can put the recipes you learned most recently first.** *Newest recipes first* sorts by the start of each recipe's skill range, highest first, since trainers teach recipes in that order, and keeps unlearned recipes under their divider. It is in the Filter menu's *Sort by* section and in the addon's settings. Thanks to cotijelucie on Discord for the idea (#486).
+- **The Professions window keeps one width while it is open.** Searching, filtering, collapsing a category or crafting used to let the window grow and shrink as the recipe list changed. It now takes its width when a profession opens and keeps it, so the window stops moving under your pointer. Reported on CurseForge by CodexFD (#505).
+- **Hovering items no longer stutters with Auctionator loaded.** Each item the game looked up for a tooltip made SkillUp work out the shopping list of every route you track again. Those lists now stay as they are until a price, a plan or your bags change them. Reported on GitHub by Weythx (#503).
+
+<!-- discord-image: docs/screenshots/window.png -->
 
 ## [1.2.2] - 2026-11-09
 

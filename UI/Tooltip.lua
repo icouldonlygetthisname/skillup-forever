@@ -227,13 +227,15 @@ function ns.PriceAgeText(price)
 	return string.format(L["%dd ago"], price.days)
 end
 
--- What to do about a reagent with no price: auction prices come only from Auctionator.
+-- What to do about a reagent with no price: auction prices come only from Auctionator or TradeSkillMaster.
 ---@return string
 function ns.UnpricedHint()
 	if ns.HasAuctionator() then
 		return L["Scan the auction house with Auctionator, or visit a vendor, to price reagents."]
+	elseif ns.HasTradeSkillMaster() then
+		return L["Update TradeSkillMaster's AuctionDB with the TSM desktop app, or visit a vendor, to price reagents."]
 	end
-	return L["Visit a vendor to price reagents. Auction prices need Auctionator."]
+	return L["Visit a vendor to price reagents. Auction prices need Auctionator or TradeSkillMaster."]
 end
 
 ---@param price SkillUpPrice
@@ -255,6 +257,8 @@ function ns.PriceSourceText(price)
 		return L["vendor"]
 	elseif price.source == "auctionator" then
 		return string.format(L["Auctionator, %s"], ns.PriceAgeText(price))
+	elseif price.source == "tsm" then
+		return L["TradeSkillMaster"]
 	end
 	error("unknown price source: " .. tostring(price.source))
 end
@@ -535,7 +539,7 @@ local function Uses(itemID)
 	local uses = {}
 	for _, recipeID in ipairs(ns.UsedIn(itemID)) do
 		local profession = professions[ns.RecipeData[recipeID].skillLine]
-		local t = profession and ns.Model.Get(recipeID)
+		local t = profession and ns.RangeThresholds(profession, recipeID)
 		if t and profession.skill < t[4] then
 			uses[#uses + 1] = { recipeID = recipeID, t = t, skill = profession.skill, learned = ns.IsLearned(recipeID) }
 		end
@@ -646,12 +650,14 @@ local function MadeByLines(itemID)
 		return lines
 	end
 	local best, bestSkill, first
+	local professions = ns.PlayerProfessions()
 	for _, recipeID in ipairs(ns.MakersOf(itemID)) do
 		local recipe = ns.RecipeData[recipeID]
 		local name = recipe and C_TradeSkillUI.GetTradeSkillDisplayName(recipe.skillLine)
 		if name then
 			first = first or { name = name }
-			local t = ns.Model.Get(recipeID)
+			local profession = professions[recipe.skillLine] or { skillLine = recipe.skillLine, modifier = 0 }
+			local t = ns.RangeThresholds(profession, recipeID)
 			local skill = t and t[1]
 			if skill and (not best or skill < bestSkill) then
 				best, bestSkill = { name = name }, skill

@@ -93,7 +93,7 @@ ns.REAGENT_TOOLTIP_OPTIONS = {
 ns.TITLE = "SkillUp Forever"
 -- The chat line after an update: one sentence for the release being tagged, the bold lead of one of its
 -- CHANGELOG.md bullets (tests/core_spec.lua holds it to the newest entry).
-ns.WHATS_NEW = L["Tailoring and First Aid have a route without Auctionator."]
+ns.WHATS_NEW = L["The tracker no longer flashes while you hover equippable items."]
 
 -- Classic difficulty colours, matching the retail recipe list's own palette.
 ns.COLORS = {
@@ -776,7 +776,9 @@ end
 ---@param ctx SkillUpContext?
 ---@return SkillUpDescription
 function ns.Describe(recipeInfo, ctx)
-	local thresholds = ns.Model.Get(recipeInfo.recipeID)
+	-- Where a recipe can first be learned is the start of its range, not the client's placeholder first
+	-- threshold (#519): rows, the tooltip line and its bar all draw this.
+	local thresholds = ns.RangeThresholds(ctx, recipeInfo.recipeID)
 	local liveColor = LIVE_COLOR[recipeInfo.relativeDifficulty]
 	local cost, value, net = ns.CraftCost(recipeInfo.recipeID)
 	if not thresholds or not ctx then

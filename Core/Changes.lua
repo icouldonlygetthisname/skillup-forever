@@ -130,16 +130,20 @@ local STALE = {
 	bags = { tooltipRouteTools = true, api = true, route = true, tracker = true, shoppingList = true },
 	-- Item data arrived; `names` when the public list was waiting on it. An item tooltip's lines hold no item
 	-- name, and a route's tooltip lines hold no shopping source, so `tooltipCache` and `tooltipRoute` stay.
-	-- `trackedNeeds` stays too: its shopping sources come from the price cache, which item data does not drop.
-	-- Item info a price waited on reports `prices` (Integrations/Prices.lua), and that drops it. Bag addons load
-	-- item data constantly, and every rebuild re-ran RouteReagents for each tracked route (50-80 ms frames, #412).
+	-- `trackedNeeds` stays too: the one item-data input its list reads, a vendor sell price
+	-- (Integrations/Prices.lua's SellPrice), reports `prices` when it arrives. Item data arrives for any item,
+	-- from any addon, so dropping the list here rebuilt every tracked route on every hover. `tracker` stays for
+	-- the same reason: UI/Shopping.lua keeps the names its section is waiting on and reports the tracker only
+	-- when one of them arrives, so a tooltip hover draws no section (#526).
 	items = {
 		route = true,
-		tracker = true,
 		gear = true,
 		buffs = true,
 		shoppingList = true,
 	},
+	-- The name the tracker was waiting on arrived. Only that section draws item names, so only it redraws
+	-- (UI/Shopping.lua); the item data event itself drops nothing for it (#526).
+	trackerNames = { tracker = true },
 	names = { api = true },
 	level = {
 		tooltipCache = true,

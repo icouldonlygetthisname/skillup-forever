@@ -95,6 +95,7 @@
 ---@field LearnSource fun(profession: SkillUpContext, recipeID: integer): SkillUpLearnSource?
 ---@field LearnSourceText fun(source: SkillUpLearnSource|SkillUpUnlearnedRecipe): string
 ---@field LearnSkill fun(profession: SkillUpContext, recipeID: integer): number
+---@field RangeThresholds fun(profession: SkillUpContext?, recipeID: integer, thresholds?: number[]): number[]? The thresholds with the range start at the skill the recipe can be learned at
 ---@field UnlearnedRecipes fun(profession: SkillUpContext): SkillUpUnlearnedRecipe[]
 ---@field RecipeNPC fun(profession: SkillUpContext, recipeID: integer): integer?
 ---@field BestTraining fun(profession: SkillUpContext, known: table<integer, boolean>, offers: {recipeID: integer, fee: number}[]): integer?
@@ -142,7 +143,9 @@
 ---@field SetSortMode fun(mode: string)
 ---@field SetBuffsOnly fun(on: boolean)
 ---@field OpenSettings fun()
+---@field OpenSettingsPanel fun(categoryID?: integer, element?: string): boolean Blizzard's settings panel, opened through the client's secure opener (Core/OpenSettings.lua)
 ---@field HasAuctionator fun(): boolean
+---@field HasTradeSkillMaster fun(): boolean
 ---@field WithItemNames fun(items: SkillUpShoppingItem[], callback: fun())
 ---@field PlannedCrafts fun(recipeID: integer): integer
 ---@field ReagentShortfall fun(recipeID: integer, count: integer): SkillUpShoppingItem[], integer
@@ -459,9 +462,9 @@ SkillUpForeverDB = nil
 ---@field count number
 
 -- What a writer or a game event says changed, and the caches and views Core/Changes.lua keeps fresh.
----@alias SkillUpChange 'recipes'|'window'|'skill'|'talents'|'professions'|'prices'|'bags'|'items'|'names'|'level'|'zone'|'merchant'|'fees'|'sources'|'target'|'tracking'|'settings'
+---@alias SkillUpChange 'recipes'|'window'|'skill'|'talents'|'professions'|'prices'|'bags'|'items'|'trackerNames'|'names'|'level'|'zone'|'merchant'|'fees'|'sources'|'target'|'tracking'|'settings'
 ---@alias SkillUpStale 'schematics'|'prices'|'plans'|'trackedNeeds'|'tooltipRoute'|'tooltipRouteTools'|'api'|'route'|'recipeList'|'tracker'|'trainer'|'routeTab'|'pages'|'gear'|'buffs'|'tooltipCache'|'tooltip'|'auctionSearch'|'detailsBar'|'shoppingList'
----@alias SkillUpPriceSource 'vendor'|'auctionator'|'gather'
+---@alias SkillUpPriceSource 'vendor'|'auctionator'|'tsm'|'gather'
 ---@alias SkillUpCollectMode 'gather'|'auction'
 ---@alias SkillUpShoppingSource 'gather'|'vendor'|'auction'|'unknown'
 ---@class SkillUpPrice
@@ -699,6 +702,7 @@ SkillUpForeverDB = nil
 -- The one side tab and the bottom tabs of the pages that are on (UI/Pages.lua).
 ---@class SkillUpPages
 ---@field Register fun(spec: SkillUpPageSpec)
+---@field Unlocked fun(fn: fun()): boolean
 ---@field Open fun()
 ---@field Close fun(id: SkillUpPageID)
 ---@field Select fun(id: SkillUpPageID)

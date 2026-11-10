@@ -126,20 +126,9 @@ Reset()
 ns.TrackedNeeds()
 equal(reagents, tracked, "picking the tool up rebuilds the routes again")
 
--- Bag addons load item data all the time. A burst of it moves no plan, tool or price, so no route's material
--- list is rebuilt for it.
-Reset()
-for _ = 1, 40 do
-	c.Fire("ITEM_DATA_LOAD_RESULT", SILK, true)
-end
-c.Advance(0)
-ns.TrackedNeeds()
-equal(cold, 0, "a burst of item data rebuilds no plan")
-equal(reagents, 0, "and rebuilds no route's material list")
-
--- A price can move a reagent between shopping sources without moving a plan or a tool. A tracked list
--- that kept its old build would show the wrong bucket until something else changed. The shopping source
--- comes from the price cache, which only `prices` drops: item info a price waited on reports that.
+-- Item data reaches a tracked list only through a vendor sell price, and that reports `prices` when it
+-- arrives (#503). The item data event alone leaves the list as it is; the price change that follows moves a
+-- reagent between shopping sources, without the list keeping a wrong bucket until something else changed.
 local realSource = ns.PriceSource
 local sourceOverride
 ns.PriceSource = function(itemID)
@@ -162,7 +151,13 @@ sourceOverride = { [SILK] = "auctionator" }
 Reset()
 ns.Changed("prices")
 c.Advance(0)
-equal(SilkSource(), "auction", "a price that moves it to the auction bucket updates the tracked list")
+equal(reagents, 0, "item data alone rebuilds no route's material list")
+equal(SilkSource(), "vendor", "and leaves the reagent where it was")
+Reset()
+ns.Changed("prices")
+equal(SilkSource(), "auction", "the price change that arrives with it moves the reagent to the auction bucket")
+equal(reagents, tracked, "rebuilding each tracked route")
+equal(cold, tracked, "and its plan")
 ns.PriceSource = realSource
 sourceOverride = nil
 ns.Changed("prices")
