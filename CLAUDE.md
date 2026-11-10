@@ -10,9 +10,11 @@ Fork of [cjber/skillup-forever](https://github.com/cjber/skillup-forever) (GPL-3
 
 ## Fixes
 
-| Commit | What | Upstream |
+No local fixes right now: `local-fixes` is the upstream release plus this file, so plain CurseForge updates are fine.
+
+| Fix | What | Upstream |
 |---|---|---|
-| `fix(perf): item data no longer rebuilds every tracked route (#412)` | `STALE.items` no longer drops `trackedNeeds`. Bag addons (Baganator/Syndicator) fire `ITEM_DATA_LOAD_RESULT` constantly, and every rebuild re-ran `RouteReagents` for each tracked route (50-80 ms frames). Prices that wait on item data already report `prices`. | not reported yet |
+| item data no longer rebuilds every tracked route | `STALE.items` dropped `trackedNeeds`. Bag addons (Baganator/Syndicator) fire `ITEM_DATA_LOAD_RESULT` constantly, and every rebuild re-ran `RouteReagents` for each tracked route (50-80 ms frames). | Fixed upstream in v1.3.x (#506, and #526 for the tracker redraw). Our commit was dropped on 2026-11-10. |
 
 ## New upstream release
 
