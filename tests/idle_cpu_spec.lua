@@ -149,7 +149,7 @@ Reset()
 equal(SilkSource(), "vendor", "the reagent starts in the vendor bucket")
 sourceOverride = { [SILK] = "auctionator" }
 Reset()
-ns.Changed("prices")
+c.Fire("ITEM_DATA_LOAD_RESULT", SILK, true)
 c.Advance(0)
 equal(reagents, 0, "item data alone rebuilds no route's material list")
 equal(SilkSource(), "vendor", "and leaves the reagent where it was")
