@@ -1,14 +1,19 @@
 ---@type string, SkillUpNamespace
 local _, ns = ...
+
+if ns.broken then
+	return
+end
 local L = ns.L
 
 -- At the auction house, the Professions window's selected recipe gets a bar: how many to craft, and a search for
 -- what its reagents still lack for that many (#142). It only searches; buying stays the player's.
 
 local CALLER = "SkillUp Forever"
--- Where a reagent's price comes from, as the route's shopping list groups it: only the auction house's and the
--- unpriced are searched there, as with the route's own Auctionator list.
-local AUCTION_SOURCES = { auctionator = true }
+-- Where a reagent's price comes from, as the route's shopping list groups it: only the auction house's, the
+-- unpriced ones a gatherable stays with Buy reagents on, and the unpriced are searched there, as with the
+-- route's own Auctionator list.
+local AUCTION_SOURCES = { auctionator = true, auction = true }
 
 -- How many of a recipe to search reagents for: the crafts the route plans for it, else one.
 ---@param recipeID integer
@@ -82,15 +87,14 @@ function ns.SearchReagents(recipeID, count)
 			if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then
 				return
 			end
-			ns.SafeCall("auction house reagent search", function()
-				local searches, names = {}, {}
+			ns.core.SafeCall("auction house reagent search", function()
+				local searches, names, advanced = {}, {}, {}
 				for _, item in ipairs(short) do
 					local name = assert(C_Item.GetItemNameByID(item.itemID))
 					names[#names + 1] = name
-					searches[#searches + 1] = api.ConvertToSearchString(
-						CALLER,
-						{ searchString = name, isExact = true, quantity = item.count }
-					)
+					local request = { searchString = name, isExact = true, quantity = item.count }
+					advanced[#advanced + 1] = request
+					searches[#searches + 1] = api.ConvertToSearchString(CALLER, request)
 				end
 				local listName = ns.AuctionListName("crafting")
 				if listName then
@@ -98,7 +102,7 @@ function ns.SearchReagents(recipeID, count)
 				end
 				-- MultiSearchAdvanced keeps the quantities; an older Auctionator searches the exact names.
 				if api.MultiSearchAdvanced then
-					api.MultiSearchAdvanced(CALLER, searches)
+					api.MultiSearchAdvanced(CALLER, advanced)
 				elseif api.MultiSearchExact then
 					api.MultiSearchExact(CALLER, names)
 				end
@@ -132,6 +136,67 @@ function ns.SearchReagents(recipeID, count)
 	end
 	nextIndex = nextIndex + 1
 	return "game", item
+end
+
+-- Price the tracked routes once per visit. Vendor fallbacks remain candidates: an auction may be cheaper.
+-- Auctionator reports whole days, so zero is its current observation and anything older needs a refresh.
+local visit = 0
+local visitSearched = false
+
+local function PriceRoute()
+	if visitSearched or ns.db.auctionSearch == false or ns.CollectMode() ~= "auction" or not ns.HasAuctionator() then
+		return
+	end
+	local api = Auctionator.API.v1
+	if not (api.GetAuctionPriceByItemID and (api.MultiSearchAdvanced or api.MultiSearchExact)) then
+		return
+	end
+	local needs = {}
+	for _, entry in ipairs(ns.TrackedNeeds()) do
+		for _, item in ipairs(entry.items) do
+			needs[item.itemID] = (needs[item.itemID] or 0) + item.need
+		end
+	end
+	local short = {}
+	for itemID, needed in pairs(needs) do
+		local missing = needed - ns.Have(itemID)
+		local price = api.GetAuctionPriceByItemID(CALLER, itemID)
+		local age = api.GetAuctionAgeByItemID and api.GetAuctionAgeByItemID(CALLER, itemID)
+		if missing > 0 and (price == nil or age == nil or age > 0) then
+			short[#short + 1] = { itemID = itemID, count = missing }
+		end
+	end
+	if #short == 0 then
+		return
+	end
+	table.sort(short, function(a, b)
+		return a.itemID < b.itemID
+	end)
+	visitSearched = true
+	local requestedVisit = visit
+	ns.WithItemNames(short, function()
+		if
+			requestedVisit ~= visit
+			or ns.db.auctionSearch == false
+			or ns.CollectMode() ~= "auction"
+			or not (AuctionHouseFrame and AuctionHouseFrame:IsShown())
+		then
+			return
+		end
+		ns.core.SafeCall("auction house route prices", function()
+			local advanced, names = {}, {}
+			for _, item in ipairs(short) do
+				local name = assert(C_Item.GetItemNameByID(item.itemID))
+				names[#names + 1] = name
+				advanced[#advanced + 1] = { searchString = name, isExact = true, quantity = item.count }
+			end
+			if api.MultiSearchAdvanced then
+				api.MultiSearchAdvanced(CALLER, advanced)
+			else
+				api.MultiSearchExact(CALLER, names)
+			end
+		end)
+	end)
 end
 
 -- A closed auction house starts the next visit's round from the first reagent.
@@ -173,8 +238,11 @@ local function ShowSearchTooltip(button)
 	end
 	if #short == 0 and elsewhere == 0 then
 		GameTooltip_AddNormalLine(GameTooltip, L["Your bags and bank have enough."])
-	elseif #short > 0 and not ns.HasAuctionator() then
-		GameTooltip_AddDisabledLine(GameTooltip, L["Each click puts the next one in the search box; press Search."])
+	elseif #short > 0 then
+		local recipe = ns.RecipeData[recipeID]
+		local profession = recipe and ns.RouteProfessions()[recipe.skillLine]
+		local listName = profession and ns.AuctionListName(profession.name)
+		GameTooltip_AddNormalLine(GameTooltip, ns.AuctionListNote(listName and { listName } or nil))
 	end
 	GameTooltip:Show()
 end
@@ -229,8 +297,9 @@ end
 
 function ns.AttachAuctionSearch()
 	local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
+	---@cast page SkillUpCraftingPage
 	local form = page and page.SchematicForm
-	if bar or not form then
+	if bar or not page or not form then
 		return
 	end
 	bar = CreateFrame("Frame", nil, page) --[[@as SkillUpAuctionBar]]
@@ -282,6 +351,9 @@ for _, event in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED" }) do
 	ns.WhenEvent(event, function()
 		if event == "AUCTION_HOUSE_CLOSED" then
 			ForgetRound()
+			visit, visitSearched = visit + 1, false
+		else
+			C_Timer.After(0, PriceRoute)
 		end
 		-- Blizzard shows or hides its frame on the same event; read it a frame later.
 		C_Timer.After(0, Refresh)

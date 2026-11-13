@@ -1,12 +1,32 @@
 ---@type string, SkillUpNamespace
 local addonName, ns = ...
 local L = ns.L
+
+if ns.broken then
+	return
+end
+
 ns.ReportTitle = L["SkillUp report"]
+-- The one client icon every in-game identity surface draws: the side tab and the shopping windows.
+-- tab. The TOC declares it once and the drawn media/Icon stays the addon's store and TOC identity.
+ns.ICON = C_AddOns.GetAddOnMetadata(addonName, "X-Forever-Icon") --[[@as string]]
+-- The shared services, registered once: the report window's title and SkillUp's own report lines.
+ns.core = ForeverCore.Register(addonName, {
+	title = ns.ReportTitle,
+	lines = function()
+		return ns.ReportLines()
+	end,
+})
+
+-- Hands the generated player credits to the shared Thanks page (WFA-31). An older core has no Credits module, and the
+-- addon loads as before.
+if type(ForeverCore.Credits) == "table" then
+	ns.core.SafeCall("credits", ForeverCore.Credits.Register, "SkillUp Forever", ns.Credits)
+end
 
 ---@type SkillUpDefaults
 local DEFAULTS = {
 	showRowText = true,
-	wideRecipeList = true, -- widen the recipe list and the window to the longest recipe name in the open profession
 	showUnlearned = false, -- also list recipes this character has not learned, greyed, with where they are learned
 	buffsOnly = false, -- list only recipes whose product is a buff this character's level can use
 	showSkill = false,
@@ -31,12 +51,12 @@ local DEFAULTS = {
 	auctionSearch = true, -- the Professions window's reagent search while the auction house is open
 	reagentTooltip = "route",
 	gatherTooltip = true, -- a herb or ore node's and a skinnable corpse's required skill, coloured at yours
-	collectModes = {}, -- ["Name-Realm"] = "gather" | "auction": where a reagent you could gather comes from
+	collectModes = {}, -- ["Name-Realm"] = "gather" | "auction": where a gatherable comes from; auction by default
 	showAllGear = {}, -- ["Name-Realm"] = true: the crafted gear view shows gear this character cannot make yet
 	pinnedRecipes = {}, -- ["Name-Realm"] = { [recipeID] = priority }: most recently pinned wins
 	skippedRecipes = {}, -- ["Name-Realm"] = { [recipeID] = true }: "Not this recipe", left out of every route
 	whatsNew = true,
-	suggestFamily = true, -- the quiet lines about my other Forever addons, where one would help (UI/ForeverFamily.lua)
+	suggestFamily = true, -- the quiet lines about my other Forever addons, where one would help (ForeverCore.Family)
 	lastVersion = "", -- the version that last ran; "" before the first
 	vendor = {}, -- [itemID] = copper per unit, observed at merchants
 	-- [itemID] = { [npcID] = count or false }: the most a vendor was seen selling at a time, false for unlimited
@@ -48,13 +68,7 @@ local DEFAULTS = {
 	builds = {},
 	routeTargets = {}, -- [profession skill line] = target base skill
 	learned = {}, -- ["Name-Realm"] = { [recipeID] = true }
-	statsShare = true,
 	observedRecipes = {}, -- ["Name-Realm"] = { ids = { [recipeID] = true }, eventUnix = latest observation }
-	peerStats = {}, -- ["Name-Realm"] = peer rows for this character's guild and groups
-	-- The shared error journal (Core/SafeCall.lua): earlier sessions' errors, listed in the report after a /reload.
-	errors = {},
-	-- The shared log (Core/Log.lua): the recent lines that led up to a bug, cut into the report after them.
-	log = { lines = {}, pinned = false },
 	professionIDs = {}, -- [localized profession name] = skill line, seen with the profession open
 	trackedProfessions = {}, -- [profession skill line] = true tracked, false stopped by hand, nil undecided
 	trainer = {}, -- [skill line] = { [recipeID] = { fee, required base skill } }, recorded at trainers
@@ -91,9 +105,12 @@ ns.REAGENT_TOOLTIP_OPTIONS = {
 	{ "full", L["Every recipe that uses it"] },
 }
 ns.TITLE = "SkillUp Forever"
--- The chat line after an update: one sentence for the release being tagged, the bold lead of one of its
--- CHANGELOG.md bullets (tests/core_spec.lua holds it to the newest entry).
-ns.WHATS_NEW = L["The tracker no longer flashes while you hover equippable items."]
+-- The newest release in CHANGELOG.md with a bold headline, and that headline: said once in chat after an update. A
+-- core sync's maintenance entry has no headline, so these stay on the release before it, and an update to a
+-- maintenance version says nothing new but still remembers the version. Rewrite both lines for each release that has
+-- a headline (tests/core_spec.lua checks them against CHANGELOG.md).
+ns.WHATS_NEW_VERSION = "1.9.5"
+ns.WHATS_NEW = L["The skill band clears the recipe icon and the Reagents header."]
 
 -- Classic difficulty colours, matching the retail recipe list's own palette.
 ns.COLORS = {
@@ -126,19 +143,6 @@ end
 ---@return boolean
 function ns.GamepadUI()
 	return InputUtil.IsGamepadUIEnabled()
-end
-
--- A Blizzard context menu from our own code: under the gamepad interface it would taint the gamepad focus, so
--- the player gets a line instead and no menu opens.
----@param owner Frame
----@param generator fun(owner: Frame, root: RootMenuDescriptionProxy)
----@return any
-function ns.ContextMenu(owner, generator)
-	if ns.GamepadUI() then
-		UIErrorsFrame:AddMessage(L["This menu needs mouse and keyboard."], 1, 1, 0)
-		return nil
-	end
-	return MenuUtil.CreateContextMenu(owner, generator)
 end
 
 -- A dropdown's own OpenMenu, under the gamepad interface, without opening a menu: a press steps to the next
@@ -238,7 +242,7 @@ local function LoadDB()
 	end
 	-- Earlier versions saved a trainer row that showed no skill requirement as needing 0, which planned
 	-- learning it at once; the bundled requirement stands in for those. A shown requirement that is no
-	-- skill is forgotten, so /su trainers never reports it.
+	-- skill is forgotten, so /skillup trainers never reports it.
 	for skillLine, recipes in pairs(loaded.trainer) do
 		if type(skillLine) ~= "number" or type(recipes) ~= "table" then
 			loaded.trainer[skillLine] = nil
@@ -283,13 +287,15 @@ local function LoadDB()
 			end
 		end
 	end
-	-- A mode no longer saved, or a typo, reads as the default gather.
+	-- A mode no longer saved, or a typo, reads as the default auction: buying is the faster way to skill up.
 	for key, mode in pairs(loaded.collectModes) do
 		if mode ~= "gather" and mode ~= "auction" then
 			loaded.collectModes[key] = nil
 		end
 	end
 	SkillUpForeverDB = loaded
+	loaded.peerStats = nil
+	loaded.statsShare = nil
 	ns.db = loaded
 end
 
@@ -335,20 +341,9 @@ local function ReadChanceBonus()
 	return ns.Model.SetChanceBonus(WorkingOvertimePoints() * WORKING_OVERTIME_PER_POINT)
 end
 
----@return ForeverTrackerSettings
-function ns.TrackerHostSettings()
-	if type(ns.db.trackerHost) ~= "table" then
-		ns.db.trackerHost = { attached = true, locked = false }
-	end
-	-- Lock defaults off, and a trackerHost saved before it existed simply gains the key.
-	if type(ns.db.trackerHost.locked) ~= "boolean" then
-		ns.db.trackerHost.locked = false
-	end
-	return ns.db.trackerHost
-end
-
 -- One chat line after an update, never on a first install. A dev checkout's version is
--- the packager's unfilled keyword, so it is left alone.
+-- the packager's unfilled keyword, so it is left alone. A maintenance release, the core sync's entry with no
+-- headline, has no WHATS_NEW_VERSION of its own, so it stays quiet like the same version.
 function ns.AnnounceUpdate()
 	local version = C_AddOns.GetAddOnMetadata(addonName, "Version")
 	if not (ns.db and version) or version:match("^@.+@$") then
@@ -356,7 +351,7 @@ function ns.AnnounceUpdate()
 	end
 	local last = ns.db.lastVersion
 	ns.db.lastVersion = version
-	if ns.db.whatsNew and last ~= "" and last ~= version then
+	if ns.db.whatsNew and last ~= "" and last ~= version and version == ns.WHATS_NEW_VERSION then
 		ns.Print(string.format(L["updated to %s. %s"], version, ns.WHATS_NEW))
 	end
 end
@@ -517,13 +512,13 @@ function ns.SellerFresh(seller)
 	return false
 end
 
--- Where the routes take a reagent this character could gather or buy: "gather" prices it free,
--- "auction" buys it at a vendor or the auction house like any other.
+-- Where the routes take a reagent this character could gather or buy: "auction" (the default) buys it at a
+-- vendor or the auction house like any other, and "gather" prices it free. A saved choice is kept (#559).
 ---@return SkillUpCollectMode
 function ns.CollectMode()
 	local key = ns.CharacterKey()
 	local mode = key and ns.db.collectModes[key]
-	return mode == "auction" and "auction" or "gather"
+	return mode == "gather" and "gather" or "auction"
 end
 
 ---@param mode SkillUpCollectMode
@@ -829,7 +824,7 @@ function ns.RowColor(d)
 	return ns.COLORS[d.chance and d.color or (d.thresholds and "red" or "unknown")]
 end
 
--- /su audit's lines: with a profession open, the bundled thresholds against the colours the game shows, as a
+-- /skillup audit's lines: with a profession open, the bundled thresholds against the colours the game shows, as a
 -- summary line then each mismatch; nil with none open. English throughout: it is a data check for bug reports.
 ---@return string[]?
 function ns.AuditLines()
@@ -894,7 +889,7 @@ local function Audit()
 	end
 end
 
--- /su skipped: this character's skipped recipes, each with its ID for /su unskip.
+-- /skillup skipped: this character's skipped recipes, each with its ID for /skillup unskip.
 local function ListSkipped()
 	local skipped = ns.SkippedRecipes()
 	if #skipped == 0 then
@@ -905,10 +900,10 @@ local function ListSkipped()
 	for _, recipe in ipairs(skipped) do
 		ns.Print(string.format("%s (%d)", recipe.name, recipe.recipeID))
 	end
-	ns.Print(L["/su unskip <recipe ID> shows one again, /su unskip all every one."])
+	ns.Print(L["/skillup unskip <recipe ID> shows one again, /skillup unskip all every one."])
 end
 
--- /su unskip <recipe ID> or /su unskip all: Show again, from chat.
+-- /skillup unskip <recipe ID> or /skillup unskip all: Show again, from chat.
 ---@param argument string
 local function Unskip(argument)
 	if argument == "all" then
@@ -920,7 +915,7 @@ local function Unskip(argument)
 	end
 	local recipeID = tonumber(argument)
 	if not (recipeID and ns.IsSkipped(recipeID)) then
-		ns.Print(L["/su skipped lists the recipes you skipped, with their IDs."])
+		ns.Print(L["/skillup skipped lists the recipes you skipped, with their IDs."])
 		return
 	end
 	ns.SetSkipped(recipeID, false)
@@ -928,11 +923,11 @@ local function Unskip(argument)
 	ns.Print(string.format(L["Show again: %s"], name))
 end
 
--- /su export trainers (#124): the requirements this character's trainers actually showed, as a table for
+-- /skillup export trainers (#124): the requirements this character's trainers actually showed, as a table for
 -- tools/gen_trainer.py's SEEN_REQUIREMENTS, so a value no bundled rule guessed right can be fixed for everyone.
--- Trainers are the only export, so /su export does the same as /su export trainers. The copy window when it can
--- open, the same lines in chat when it cannot: nothing is written, nothing prints on login, nothing waits on an
--- event, and there is no protected call in it.
+-- Trainers are the only export, so /skillup export does the same as /skillup export trainers. The copy window
+-- when it can open, the same lines in chat when it cannot: nothing is written, nothing prints on login, nothing
+-- waits on an event, and there is no protected call in it.
 local function Export()
 	local lines = ns.TrainerExport()
 	if not lines[1] then
@@ -940,7 +935,7 @@ local function Export()
 		return
 	end
 	local text = table.concat(lines, "\n")
-	local shown = ns.Report and ns.Report.Show and ns.SafeCall and ns.SafeCall("export window", ns.Report.Show, text)
+	local shown = ns.core.SafeCall("export window", ns.core.Report.Show, text)
 	if not shown then
 		for _, line in ipairs(lines) do
 			ns.Print(line)
@@ -949,11 +944,10 @@ local function Export()
 end
 
 SLASH_SKILLUPFOREVER1 = "/skillup"
-SLASH_SKILLUPFOREVER2 = "/su"
 
 -- The /skillup commands, in dispatch order. The shared report commands come first, as they did before the table,
--- so the table order is also the order /su help prints. `arguments`, when set, lists the only values the command
--- accepts; nil accepts any argument. `help` is the line /su help prints, or nil for a command the help leaves out.
+-- so the table order is also the order /skillup help prints. `arguments`, when set, lists the only values the command
+-- accepts; nil accepts any argument. `help` is the line /skillup help prints, or nil for a command the help leaves out.
 ---@return nil
 local function Help()
 	for _, entry in ipairs(ns.SlashCommands) do
@@ -967,51 +961,28 @@ end
 ---@param command string
 ---@param argument string
 local function ReportCommand(command, argument)
-	if ns.Report and ns.Report.Command then
-		ns.Report.Command(command, argument)
-	end
+	ns.core.Report.Command(command, argument)
 end
 
 local BUG, FEATURE = "bug", "feature"
-local SHARE_ON, SHARE_OFF = "on", "off"
 ---@type SkillUpSlashCommand[]
 ns.SlashCommands = {
 	{
 		word = "report",
 		handler = ReportCommand,
-		help = L["/su report - show a report to copy into a bug report"],
+		help = L["/skillup report - show a report to copy into a bug report"],
 	},
 	{
 		word = "issue",
 		aliases = { BUG, FEATURE },
 		handler = ReportCommand,
-		help = L["/su issue - report a bug or request a feature with a ready-made GitHub issue link"],
+		help = L["/skillup issue - report a bug or request a feature with a ready-made GitHub issue link"],
 	},
 	{ word = "help", handler = Help },
 	{
 		word = "export",
 		handler = Export,
-		help = L["/su export - show the trainer requirements this character has seen, to paste into a report"],
-	},
-	{
-		word = "leaderboard",
-		aliases = { "stats" },
-		handler = function()
-			if ns.Stats then
-				ns.Stats.Open()
-			end
-		end,
-		help = L["/su leaderboard - open Forever Leaderboards on this addon's tab (also /su stats)"],
-	},
-	{
-		word = "share",
-		arguments = { SHARE_ON, SHARE_OFF },
-		handler = function(_, argument)
-			if ns.Stats and ns.db then
-				Settings.SetValue("SkillUpForever_statsShare", argument == SHARE_ON)
-			end
-		end,
-		help = L["/su share on|off - control sharing with guild and group"],
+		help = L["/skillup export - show the trainer requirements this character has seen, to paste into a report"],
 	},
 	{
 		word = "shopping",
@@ -1060,12 +1031,7 @@ local function Slash(msg)
 	ns.OpenSettings()
 end
 SlashCmdList.SKILLUPFOREVER = function(msg)
-	-- Without Core/SafeCall.lua (a /reload after an update that added it) the command runs as it is.
-	if ns.SafeCall then
-		ns.SafeCall("slash command", Slash, msg)
-	else
-		Slash(msg)
-	end
+	ns.core.SafeCall("slash command", Slash, msg)
 end
 
 function SkillUpForever_OnAddonCompartmentClick()
@@ -1088,11 +1054,7 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			and ns.PlanRoute
 			and ns.CraftedGear
 			and ns.Changed
-			and ns.SafeCall
-			and ns.AttachLog
-			and ns.Report
 			and ns.ReportLines
-			and ns.Family
 			and ns.Stats
 		)
 	then
@@ -1100,10 +1062,9 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 		return
 	end
 	LoadDB()
-	-- The saved journal is attached once the saved variables and their defaults are in: what SafeCall recorded before
-	-- this line (the client's own early errors) arrives with it, and a /reload keeps it.
-	ns.AttachErrorJournal(SkillUpForeverDB.errors)
-	ns.AttachLog(SkillUpForeverDB.log)
+	-- The saved journal and log are core's now, under the same table: what SafeCall recorded before this line (the
+	-- client's own early errors) arrives with it, and a /reload keeps it.
+	ns.core.Attach(SkillUpForeverDB)
 	ns.NoteBuild()
 	ReadChanceBonus()
 	ns.InitCatalogue()

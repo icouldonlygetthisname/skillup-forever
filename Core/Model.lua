@@ -1,5 +1,9 @@
 ---@type string, SkillUpNamespace
 local _, ns = ...
+
+if ns.broken then
+	return
+end
 ---@class SkillUpModel
 local Model = {}
 ns.Model = Model
@@ -74,11 +78,13 @@ function Model.Get(recipeID)
 	-- bundled pair stays under the live grey.
 	local live = ns.LiveRecipes and ns.LiveRecipes[recipeID]
 	local thresholds = live and live.thresholds or (ns.Thresholds and ns.Thresholds[recipeID])
+	-- Yellow, green and grey may be equal: a recipe with no yellow or green band is orange below the value and
+	-- grey from it, not contradictory (#688). Only a band below the one before it is.
 	if
 		thresholds
 		and thresholds[1] <= thresholds[2]
 		and thresholds[2] <= thresholds[3]
-		and thresholds[3] < thresholds[4]
+		and thresholds[3] <= thresholds[4]
 	then
 		return thresholds
 	end
@@ -126,7 +132,9 @@ end
 ---@param skill number
 ---@return number?
 function Model.Chance(t, skill)
-	if not t or t[4] <= t[2] or skill < t[1] then
+	-- A grey at yellow (t[4] == t[2]) has no yellow or green band: certain below yellow, impossible from grey.
+	-- Only a grey below yellow is contradictory.
+	if not t or t[4] < t[2] or skill < t[1] then
 		return nil
 	end
 	if skill < t[2] then
@@ -649,7 +657,7 @@ end
 ---@type SkillUpShoppingSource[]
 Model.SHOPPING_SOURCES = { "gather", "vendor", "auction", "unknown" }
 ---@type table<SkillUpPriceSource, SkillUpShoppingSource>
-local BUCKET = { gather = "gather", vendor = "vendor", auctionator = "auction", tsm = "auction" }
+local BUCKET = { gather = "gather", vendor = "vendor", auctionator = "auction", tsm = "auction", auction = "auction" }
 
 -- The shopping list's bucket for a price source: what every item in the list carries as its source.
 ---@param source SkillUpPriceSource?

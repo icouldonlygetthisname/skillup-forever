@@ -26,12 +26,12 @@ The recipe tooltip draws the thresholds on the game's own bar with your skill ma
 ## Features
 
 - **Recipe rows and tooltips** show skill-up chance, cost and colour thresholds.
-- **A wide recipe list** grows to the longest recipe name in the open profession, with how many your bags can make in parentheses after each name. The window grows with it, up to the room your screen has. Turn it off in settings to keep the game's own width.
+- **Recipe rows** show skill-up chances, costs and how many your bags can make, while keeping the game's own list width.
 - **Unlearned recipes** can sit under the learned ones in the same list. A setting, off by default, greys them and marks each with its trainer or recipe item and the skill it asks, and hovering one shows its reagents, cost and skill-up colours like a learned recipe's. They cannot be selected or crafted.
 - **Sorting** orders recipes by difficulty range start, chance, cheapest skill-ups or newest learned first. *Default* restores the game's categories and filters.
 - **Buffs only** filters the list to the elixirs, flasks, Well Fed food, protection potions, stones, oils, armour kits and scopes you can use at your level, highest required level first, with unlearned ones following when *List unlearned recipes* is on.
 - **Levelling routes** list crafts, trainer visits, skill books and rank quests to your target skill, including fees, tools and stations. Steps allow for unlucky skill-ups. Cheaper crafted reagents become their own steps; a route that stops short names recipes that could extend it. Right-click a recipe to pin it for skill-ups or choose *Not this recipe* to plan without it. [Route details](docs/route.md#levelling-route).
-- **Shopping lists** count reagents against your bags and bank. *Buy reagents* chooses whether materials your professions gather are free or bought. Track the list beside quests, buy vendor stock and keep an Auctionator list up to date. At the auction house, search a recipe's reagents for as many crafts as you choose. [Shopping details](docs/route.md#shopping-list).
+- **Shopping lists** count reagents against your bags and bank. *Buy reagents* is on for a new character, so materials your professions gather are bought unless you choose to gather them. Track the list beside quests, buy vendor stock and keep an Auctionator list up to date. At the auction house, search a recipe's reagents for as many crafts as you choose. [Shopping details](docs/route.md#shopping-list).
 - **Trainer annotations** show chance and cost, with a green arrow on the recipe that best extends or cheapens your route.
 - **Reagent tooltips** show what tracked routes need. Hold Shift for every recipe that uses the item and still skills up.
 - **Gathering nodes** show the Herbalism or Mining skill they need, coloured at yours, on English clients.
@@ -66,9 +66,7 @@ At the trainer, every recipe shows its chance and cost; a green arrow marks the 
 
 Hover a reagent to see how much your tracked routes need.
 
-`/su leaderboard` (or `/su stats`) opens the shared Forever Leaderboards window on SkillUp's tab, ranking distinct recipes SkillUp has observed as learned on your character against totals reported by guild and group members, for this week or all time. The window also shows the overall standing across every installed Forever addon and puts a player's place in the unit tooltip. Repeated scans and relearning the same recipe do not increase the total. Recipes in linked or guild profession views do not count.
-
-Sharing is on by default: everyone running a Forever addon appears on the boards unless they turn it off. Turn it off with `/su share off`, the Share my progress switch in the window, or the checkbox in Settings > AddOns > SkillUp Forever. This stops sending and receiving totals and hides other players while keeping your local observations. `/su share on` resumes sharing. Reported totals are not verified.
+SkillUp keeps a local count of distinct recipes observed as learned. Repeated scans and relearning the same recipe do not increase the total. Recipes in linked or guild profession views do not count.
 
 ## Install
 
@@ -80,20 +78,20 @@ Open a profession and the numbers are already there.
 
 | Command | What it does |
 |---|---|
-| `/su`, `/skillup` | Open the settings (also in Settings → AddOns, or from the addon compartment on the minimap) |
-| `/su skipped` | List the recipes you said *Not this recipe* to on this character, with their IDs |
-| `/su unskip <ID>`, `/su unskip all` | Show a skipped recipe, or every one, in the route again |
-| `/su audit` | With a profession open, compare the bundled thresholds with the colours the game shows and print any mismatch |
-| `/su report` | Show a report to copy into a bug report: versions, professions, routes, the audit and recent errors |
-| `/su issue` | Open a ready-made GitHub issue link to report a bug or request a feature |
-| `/su shopping`, `/su shop` | Open the shopping list for tracked professions, copy it, or plan a buy trip with Shortest Path Forever |
-| `/su trainers` | List the trainer skill requirements SkillUp guessed, and which ones a trainer has confirmed or shown differently |
+| `/skillup` | Open the settings (also in Settings → AddOns, or from the addon compartment on the minimap) |
+| `/skillup skipped` | List the recipes you said *Not this recipe* to on this character, with their IDs |
+| `/skillup unskip <ID>`, `/skillup unskip all` | Show a skipped recipe, or every one, in the route again |
+| `/skillup audit` | With a profession open, compare the bundled thresholds with the colours the game shows and print any mismatch |
+| `/skillup report` | Show a report to copy into a bug report: versions, professions, routes, the audit and recent errors |
+| `/skillup issue` | Open a ready-made GitHub issue link to report a bug or request a feature |
+| `/skillup shopping`, `/skillup shop` | Open the shopping list for tracked professions, copy it, or plan a buy trip with Shortest Path Forever |
+| `/skillup trainers` | List the trainer skill requirements SkillUp guessed, and which ones a trainer has confirmed or shown differently |
 
-Settings cover rows and tooltips, the recipe list's width, what crafts count for, sort order, the route, crafted gear and buffs tabs, trainer annotations, reagent and gathering tooltips and Forever addon hints. Turn off **Show tracked professions** to hide the tracker, or **Attach to quest tracker** to drag the Forever column.
+Settings cover rows and tooltips, the recipe list's width, what crafts count for, sort order, the route, crafted gear and buffs tabs, trainer annotations, reagent and gathering tooltips and Forever addon hints. Turn off **Show tracked professions** to hide the tracker, or **Attach to quest tracker** to drag the Forever column. **Tracker scale** sizes the shared tracker from 50% to 200%, where 100% matches the game's own tracker.
 
 ## Prices
 
-Each reagent uses the cheapest known vendor or Auctionator price. Common vendor supplies have bundled prices; visiting a vendor records its prices and reputation discounts. Materials your professions gather count as free until you choose *Buy reagents*, or cost what they'd sell for with *Value gathered materials at what they'd sell for* on. *Price self-supplied reagents at auction values* prices whatever you gather, loot or already own at its market value, and leaves it unpriced rather than free when there is none.
+Each reagent uses the cheapest known vendor or Auctionator price. Common vendor supplies have bundled prices; visiting a vendor records its prices and reputation discounts. Materials your professions gather are bought with *Buy reagents* on, which is the default; choose gathering to make them free, or turn on *Value gathered materials at what they'd sell for* to cost them at what they would sell for. *Price self-supplied reagents at auction values* prices whatever you gather, loot or already own at its market value, and leaves it unpriced rather than free when there is none.
 
 Auction prices are Auctionator's latest recorded price for reagents and crafted items. With [TradeSkillMaster](https://www.curseforge.com/wow/addons/tradeskill-master) instead, or for an item Auctionator has no price for, they are its AuctionDB values, kept current by the TSM desktop app. SkillUp never scans the auction house itself: scan with Auctionator to update prices. Missing prices stay unknown and leave affected recipes out of the route.
 
@@ -111,7 +109,7 @@ Each recipe has four thresholds: orange (start of its skill range), yellow, gree
 
 The colour always comes from the game, so the addon never disagrees. Thresholds and recipe data come from the Forever client's `SkillLineAbility` (via [wago.tools](https://wago.tools)). The grey threshold is the game's own live value where it reports one. Missing or contradictory ranges show `?`. Training requirements are separate from these difficulty bands.
 
-**Found a wrong number?** Open that profession, run `/su report` and paste its text into a [Wrong number issue](https://github.com/cjber/skillup-forever/issues/new?template=wrong_number.yml).
+**Found a wrong number?** Open that profession, run `/skillup report` and paste its text into a [Wrong number issue](https://github.com/cjber/skillup-forever/issues/new?template=wrong_number.yml).
 
 ## Works alongside
 
@@ -131,8 +129,10 @@ Each one works on its own, and they work together when you install more than one
 | [Legacy Forever](https://www.curseforge.com/wow/addons/legacy-forever) | Shows your unfinished Legacy challenges on the world map and tracks the ones you choose. | [Issues](https://github.com/cjber/legacy-forever/issues) |
 | [Tweaks Forever](https://www.curseforge.com/wow/addons/tweaks-forever) | Adds quest automation, rare alerts and merchant options to the game's settings. | [Issues](https://github.com/cjber/tweaks-forever/issues) |
 | [Field Guide Forever](https://www.curseforge.com/wow/addons/field-guide-forever) | Keeps a cosmetic journal of the creatures you kill, zone by zone. | [Issues](https://github.com/cjber/field-guide-forever/issues) |
+| [Commissions Forever](https://www.curseforge.com/wow/addons/commissions-forever) | Lists your commission turn-ins, the materials in your bags and the next NPC to visit. | [Issues](https://github.com/cjber/commissions-forever/issues) |
+| [Macro Assist Forever](https://www.curseforge.com/wow/addons/macro-assist-forever) | Adds a macro window with every macro in one list, a mono editor with live checks, and history. | [Issues](https://github.com/cjber/macro-assist-forever/issues) |
 
-Bug reports, feature requests and pull requests are welcome on each addon's GitHub. Everyone whose report or idea ships is thanked by name in the addon's credits and changelog.
+Bug reports, feature requests and pull requests are welcome on each addon's GitHub. Everyone whose report or idea ships is thanked by name on the Thanks page in game, in the store page and in the changelog, unless they ask not to be.
 
 For help, ideas and each day's release notes, join [cjber's Workshop on Discord](https://discord.gg/FpHugGxRJY).
 
@@ -158,7 +158,13 @@ The addon is free and stays GPL-3.0. If it saves you time, you can [sponsor me o
 
 ## Credits
 
-Thresholds come from the game via [wago.tools](https://wago.tools), trainer fees, drop chances and gathered reagents from [CMaNGOS classic-db](https://github.com/cmangos/classic-db) (GPL-3.0), and vendor reagents from [LibPeriodicTable-3.1](https://github.com/doadin/libperiodictable-3-1) (LGPL-2.1). Some features were inspired by [Polestar](https://github.com/fitzforge/polestar) by Fitz, such as the skill colour on gathering nodes; no code was copied. Fitz is welcome to use our code. Thanks to Brainc3ll for French lines, kopuliak, chuujitsuna, berserkerlxl, syrberus, kurila11478, ballara, trias6657, deathmvp1 and everyone listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+Thresholds come from the game via [wago.tools](https://wago.tools), trainer fees, drop chances and gathered reagents from [CMaNGOS classic-db](https://github.com/cmangos/classic-db) (GPL-3.0), and vendor reagents from [LibPeriodicTable-3.1](https://github.com/doadin/libperiodictable-3-1) (LGPL-2.1). Some features were inspired by [Polestar](https://github.com/fitzforge/polestar) by Fitz, such as the skill colour on gathering nodes; no code was copied. Fitz is welcome to use our code.
+
+<!-- forever-credits:start -->
+
+Thanks to kopuliak, Mouchoir, bromidious, Chuujitsuna, trias6657, iPulse, cotijelucie, st3nlee, prokn4h, CtrlDKhayos, Diamondclaw, mimmordino, soviman1, FreakinNerd, nookie909, Rambomst, ItachiGrave, .phear, Brainc3ll, berserkerlxl, SilentGentlemanSG, BallaRa, kurila11478, Bolthorr, TechnoHunter, Viper2042, Syrberus, zazomazzo, Setuaro, 0xTrk, 3kinex, icouldonlygetthisname, jakeyjake07, Rekalicious, leenagil-coder, Weythx, lokitako, Rawveggie, sundered1985, hardliquor, CodexFD, rockhumper84, Kozoaku, Kirdan, rick1tz, time2w8, ThePNAG, derzwiebelritter, Ekallo, CorvidofShadows13, Sogu, achubbert, jackthereaper_, qwertzyxc and everyone who reported a bug or asked for a feature.
+
+<!-- forever-credits:end -->
 
 ## Licence
 

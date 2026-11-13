@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the packager's output before an upload (forever_tools.package): every file the TOC and XML load ships,
 nothing from development does, a licence file and THIRD_PARTY.md do (with README's `## Credits` and THIRD_PARTY's
-`## Ideas and contributors`, WFA-10 and WFA-31), and every spec that runs the addon passes on the packaged files.
+`## Players`, WFA-10 and WFA-31), and every spec that runs the addon passes on the packaged files.
 
     printf 'Package check\\n' > .release-notes.md
     <BigWigs packager release.sh> -d -z    # CI: the package job, with the release workflow's pinned packager
@@ -20,12 +20,15 @@ ROOT = Path(__file__).resolve().parent.parent
 # Every spec but those that read the checkout rather than the addon: locale_spec runs tools/phrases.py.
 REPO_ONLY = {"tests/locale_spec.lua"}
 POLICY = package.Policy(
-    addons=("SkillUpForever",),
+    addons=("SkillUpForever", "ForeverCore"),
+    # The specs load ForeverCore through the shared TOC reader, which is tooling and never ships.
+    support=("tests", "tools/forever_sim"),
     specs=tuple(
         spec
         for spec in sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/*_spec.lua"))
         if spec not in REPO_ONLY
-    ),
+    )
+    + ("tests/sim/exercise_scenario.lua",),
 )
 
 if __name__ == "__main__":

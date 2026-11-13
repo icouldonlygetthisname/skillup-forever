@@ -3,6 +3,7 @@
 -- follows the client's prices, bags and merchant through the plan.
 local Client = dofile("tests/client.lua")
 local equal = Client.equal
+local function noop() end
 
 local BANDAGE, HEAVY, SILK = 1, 2, 3
 local BOOK = 5000
@@ -24,18 +25,20 @@ local c = Client.load({
 	},
 })
 local ns = c.ns
+ns.SetCollectMode("gather")
 local module = c.G.SkillUpForeverObjectiveTracker
-equal(c.host.IsAttached(module), true, "attaches to private host immediately")
+equal(c.host.IsAttached(module), false, "the section waits for the world to load")
 c.EnterWorld()
-equal(#c.tracker, 1, "native initialization cannot change private ownership")
-c.G.ForeverTrackerHost, c.tracker = nil, {}
 c.Advance(0)
-equal(#c.tracker, 0, "missing private host remains inert")
-c.G.ForeverTrackerHost = c.host
-c.EnterWorld()
-equal(#c.tracker, 0, "late host waits for the deferred callback")
-c.Advance(0)
-equal(c.tracker[1], module, "deferred callback attaches after late host publication")
+equal(c.host.IsAttached(module), true, "then joins the shared host")
+-- ForeverCore's own quest section attaches to the shared host too; this is about the addon's module keeping one place.
+local attached = 0
+for _, tracked in ipairs(c.tracker) do
+	if tracked == module then
+		attached = attached + 1
+	end
+end
+equal(attached, 1, "and keeps its place through native initialization")
 
 c.level = 20
 c.spells[HEAVY] = "Heavy Linen Bandage"
@@ -51,7 +54,7 @@ local walked = ns.PlanRoute(ns.RouteProfessions()[129]).steps
 equal(walked[1].training and walked[1].training.recipeID, HEAVY, "the route page trains the recipe first")
 equal(walked[3].rank and walked[3].rank.name, "Journeyman", "and the rank after")
 equal(lines[1].key, "Train", "the tracker leads with training")
-equal(lines[1].text, "Train Heavy Linen Bandage at 40 |cff808080(+1 more)|r", "the same training")
+equal(lines[1].text, "Train Heavy Linen Bandage at 40 |cff808080(+1 more to train)|r", "the same training")
 equal(lines[2].key, SILK, "then the reagent still missing")
 
 ns.db.showTracker = false
@@ -280,6 +283,11 @@ equal(#list, 1, "with the route's one auction reagent")
 equal(list[1], "Linen Clothx" .. (Needed() - ns.Have(SILK)), "and what the route still needs")
 c.Fire("BAG_UPDATE_DELAYED")
 equal(c.shoppingLists["SkillUp: Tester-Realm: First Aid"], list, "an unchanged need does not rewrite the list")
+c.ns.db.auctionSearch = false
+c.bags[SILK] = 1
+c.Fire("BAG_UPDATE_DELAYED")
+equal(c.shoppingLists["SkillUp: Tester-Realm: First Aid"], list, "disabled automatic search does not rewrite the list")
+c.ns.db.auctionSearch = true
 c.bags[SILK] = Needed()
 c.Fire("BAG_UPDATE_DELAYED")
 equal(#c.shoppingLists["SkillUp: Tester-Realm: First Aid"], 0, "a covered need empties the list")
@@ -295,10 +303,73 @@ equal(
 )
 c.player.name = "Tester"
 
+-- Disabling automatic list maintenance does not disable an explicit Search button query.
+c.ns.db.auctionSearch = false
+c.bags[SILK] = 0
+equal(ns.SearchReagents(HEAVY, 1), "auctionator", "manual search still works when automatic search is disabled")
+
 -- The section hangs on the shared host, never on Blizzard's tracker manager: a client without the manager
--- still gets it.
+-- still gets it once the world loads.
 local bare = Client.load({ trackerManager = false })
+bare.EnterWorld()
+bare.Advance(0)
 equal(bare.host.IsAttached(bare.G.SkillUpForeverObjectiveTracker), true, "the section needs no tracker manager")
 equal(#bare.chat, 0, "and says nothing about a missing tracker")
+
+-- #557: three training stops. The count says they are stops to train, and hovering the line lists the two
+-- that follow the first, each with the skill level TrainingSteps gave it.
+c.spells[BANDAGE] = "Linen Bandage"
+local trainingPlan = {
+	profession = { name = "First Aid", skillLine = 129, capped = false },
+	target = 150,
+	steps = {
+		{ training = { recipeID = BANDAGE, fee = 0, usedAt = 20, reqSkill = 20, cap = 21 } },
+		{ training = { recipeID = HEAVY, fee = 0, usedAt = 60, reqSkill = 60, cap = 61 } },
+		{ rank = { name = "Journeyman", cap = 150, reqSkill = 50, level = 0, fee = 500 } },
+	},
+	crafts = {},
+	ranks = {},
+	unpriced = 0,
+}
+local realTrackedNeeds, realNearestTrainer, realNearestForRank, realAddNearest =
+	ns.TrackedNeeds, ns.NearestTrainer, ns.NearestForRank, ns.AddNearest
+ns.TrackedNeeds = function()
+	return { { plan = trainingPlan, items = {} } }
+end
+ns.NearestTrainer = function()
+	return 77
+end
+ns.NearestForRank = function()
+	return 77, "Nearest trainer"
+end
+ns.AddNearest = noop
+local trainingLines = c.Tracker()[1].lines
+local firstText = "Train Linen Bandage at 20"
+local secondText = "Train Heavy Linen Bandage at 60"
+local thirdText = "Train Journeyman at 50"
+equal(trainingLines[1].key, "Train", "the training line leads")
+equal(
+	trainingLines[1].text,
+	firstText .. string.format(" |cff808080(%s)|r", string.format(ns.L["+%d more to train"], 2)),
+	"the suffix counts the other training stops"
+)
+local tooltipLines = {}
+c.G.GameTooltip = { SetOwner = noop, Show = noop }
+c.G.GameTooltip_SetTitle = function(_, text)
+	tooltipLines[#tooltipLines + 1] = text
+end
+c.G.GameTooltip_AddBlankLineToTooltip = noop
+c.G.GameTooltip_AddNormalLine = function(_, text)
+	tooltipLines[#tooltipLines + 1] = text
+end
+c.G.GameTooltip_Hide = noop
+trainingLines[1].frame.scripts.OnEnter(trainingLines[1].frame)
+local joined = table.concat(tooltipLines, "\n")
+equal(joined:find(firstText, 1, true) ~= nil, true, "the tooltip titles the first stop")
+equal(joined:find(ns.L["Also train"], 1, true) ~= nil, true, "under the training heading")
+equal(joined:find(secondText, 1, true) ~= nil, true, "and lists the second training stop")
+equal(joined:find(thirdText, 1, true) ~= nil, true, "and the third")
+ns.TrackedNeeds, ns.NearestTrainer, ns.NearestForRank, ns.AddNearest =
+	realTrackedNeeds, realNearestTrainer, realNearestForRank, realAddNearest
 
 Client.report("shopping_spec")

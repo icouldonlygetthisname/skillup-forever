@@ -57,6 +57,7 @@ end
 
 local c = Load({})
 local ns = c.ns
+ns.SetCollectMode("gather")
 -- The route crafts the bandage to 60, so that is the count offered for it; a recipe it doesn't craft gets one.
 local planned = 0
 for _, craft in ipairs(ns.PlanRoute(ns.RouteProfessions()[129]).crafts) do
@@ -74,14 +75,15 @@ equal(elsewhere, 1, "the salt is counted as short elsewhere")
 equal(short[1].itemID == LINEN and short[1].count, 3, "eight linen, less the five you hold")
 equal(short[2].itemID == THREAD and short[2].count, 4, "four thread")
 -- A material this character gathers is left out while it gathers; with Buy reagents on and nothing pricing it,
--- it is priced as gathered so the route keeps it (#162), and still searched for.
+-- it is an auction price unknown so the route keeps it (#162), and it is still searched for (#559).
 ns.GatheredBy[THREAD] = 186
 c.professions[2] = { name = "Mining", rank = 1, max = 75, id = 186 }
 c.Fire("SKILL_LINES_CHANGED")
 ns.Changed("prices")
 equal(#ns.ReagentShortfall(HEAVY, 4), 1, "thread this character gathers is not searched")
 ns.SetCollectMode("auction")
-equal(ns.PriceSource(THREAD), "gather", "with Buy reagents on and no price, it is priced as gathered")
+equal(ns.PriceSource(THREAD), "auction", "with Buy reagents on and no price, it is still bought there")
+equal(ns.Price(THREAD).unknown, true, "as a price unknown")
 equal(#ns.ReagentShortfall(HEAVY, 4), 2, "but searched for")
 ns.SetCollectMode("gather")
 ns.GatheredBy[THREAD], c.professions[2] = nil, nil
@@ -149,5 +151,50 @@ c.items[THREAD] = { name = "Coarse Thread" }
 c.CloseAuctionHouse()
 equal((ns.SearchReagents(HEAVY, 3)), "unfilled", "nothing is written while the auction house is closed")
 equal(#searched, 7, "so the box is left alone")
+
+-- The first auction-house visit prices the tracked route, including vendor fallbacks.
+c = Load({})
+ns = c.ns
+ns.SetCollectMode("auction")
+c.auction[LINEN] = nil
+ns.VendorPrices[LINEN] = 5
+ns.Changed("prices")
+equal(ns.PriceSource(LINEN), "vendor", "the route has a vendor fallback before its first auction price")
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 1, "opening the auction house searches the unpriced tracked route")
+equal(c.auctionSearches[1][1]:match("^Linen Clothx") ~= nil, true, "the route search uses exact reagent names")
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 1, "duplicate show events do not repeat the visit search")
+c.Fire("AUCTION_HOUSE_CLOSED")
+c.auction[LINEN], c.auctionAge = 10, 0
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 1, "today's recorded prices need no search")
+c.Fire("AUCTION_HOUSE_CLOSED")
+c.auctionAge = 1
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 2, "a later visit refreshes older recorded prices")
+c.Fire("AUCTION_HOUSE_CLOSED")
+ns.db.auctionSearch = false
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 2, "disabled reagent searching never starts an automatic query")
+c.Fire("AUCTION_HOUSE_CLOSED")
+ns.db.auctionSearch = true
+c.Fire("AUCTION_HOUSE_SHOW")
+c.CloseAuctionHouse()
+c.Advance(0)
+equal(#c.auctionSearches, 2, "closing before the deferred visit leaves Auctionator alone")
+
+c = Load({})
+ns = c.ns
+ns.SetCollectMode("gather")
+c.auction[LINEN] = nil
+c.Fire("AUCTION_HOUSE_SHOW")
+c.Advance(0)
+equal(#c.auctionSearches, 0, "gather mode starts no auction search")
 
 Client.report("auction_search_spec")

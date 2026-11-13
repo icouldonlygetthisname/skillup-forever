@@ -1,8 +1,8 @@
 -- Run from the repository root: luajit tests/exercise_spec.lua
 -- Opens every surface the addon registers, under an error trap: the login and world-entry events, every slash
 -- command its dispatch lists, every top-level window and tab, every event a frame registered, and all of it again
--- in combat and after a /reload. Any Lua error, anything ns.SafeCall caught, anything handed to geterrorhandler or a
--- protected frame changed in combat fails the spec.
+-- in combat and after a /reload. Any Lua error, anything the shared SafeCall caught, anything handed to
+-- geterrorhandler or a protected frame changed in combat fails the spec.
 local Client = dofile("tests/client.lua")
 
 local ADDON = "SkillUpForever"
@@ -197,7 +197,9 @@ local EVENT_ARGS = {
 
 local function EventList(c)
 	local events, list = {}, {}
-	for _, frame in ipairs(c.frames) do
+	-- ForeverCore registered its own events before the addon loaded; this exercises the addon's.
+	for index = c.coreFrames + 1, #c.frames do
+		local frame = c.frames[index]
 		for event in pairs(frame.events or {}) do
 			if not events[event] then
 				events[event] = true
@@ -225,7 +227,7 @@ local function Trapped(c, label, fn, ...)
 	if not ok then
 		error(label .. ": " .. tostring(err), 0)
 	end
-	local caught = c.ns.CaughtErrors()
+	local caught = c.ns.core.CaughtErrors()
 	if #caught > 0 then
 		local last = caught[#caught]
 		error(label .. ": SafeCall caught [" .. last.label .. "] " .. last.message, 0)
@@ -243,7 +245,7 @@ local function Run(c, label, fn, ...)
 end
 
 -- Every slash command the addon registers. The table is the dispatch: its words, aliases and listed arguments are
--- the messages a player can send, and its help lines are what /su help prints.
+-- the messages a player can send, and its help lines are what /skillup help prints.
 local function Commands(c)
 	local handlers = {}
 	for key in pairs(c.G.SlashCmdList) do
@@ -293,31 +295,6 @@ local function Commands(c)
 	for index, entry in ipairs(documented) do
 		equal(printed[index] and printed[index]:find(entry.help, 1, true) ~= nil, true, "help lists " .. entry.word)
 	end
-
-	-- Forever Leaderboards' own message is a board key, or empty to toggle; every board it has is a tab.
-	local boards = { overall = true }
-	local api = c.ns.Leaderboards
-	if api and api.Boards then
-		for _, board in ipairs(api:Boards()) do
-			boards[board.key] = true
-		end
-	end
-	local keys = {}
-	for key in pairs(boards) do
-		keys[#keys + 1] = key
-	end
-	table.sort(keys)
-	for _, key in ipairs(keys) do
-		Run(c, "slash /flb " .. key, function()
-			c.G.SlashCmdList.FOREVERLEADERBOARDS(key)
-		end)
-	end
-	Run(c, "slash /flb unknown", function()
-		c.G.SlashCmdList.FOREVERLEADERBOARDS("not-a-board")
-	end)
-	Run(c, "slash /flb toggle", function()
-		c.G.SlashCmdList.FOREVERLEADERBOARDS("")
-	end)
 end
 
 -- The addon's own surfaces, opened and closed the way a click does it.
@@ -406,32 +383,16 @@ local function Surfaces(c)
 
 	-- The report window and the issue composer.
 	Run(c, "report window", function()
-		ns.Report.Show("exercise report")
+		ns.core.Report.Show("exercise report")
 		local window = rawget(G, ADDON .. "Report")
 		assert(window and window:IsShown(), "the report window is shown")
 		window:Hide()
 	end)
 	Run(c, "issue composer", function()
-		ns.Report.Compose("bug")
+		ns.core.Report.Compose("bug")
 		local window = rawget(G, ADDON .. "Issue")
 		assert(window and window:IsShown(), "the issue composer is shown")
 		window:Hide()
-	end)
-
-	-- Forever Leaderboards, one tab at a time.
-	Run(c, "leaderboards", function()
-		ns.Stats.Open()
-		local api = ns.Leaderboards
-		assert(api and api:IsShown(), "the leaderboards window is shown")
-		if api.window and api.window.tabs then
-			for _, tab in ipairs(api.window.tabs) do
-				if tab.mouseUp then
-					tab.mouseUp(tab, "LeftButton", true)
-				end
-			end
-		end
-		api:Toggle()
-		assert(not api:IsShown(), "the leaderboards window is hidden")
 	end)
 
 	-- The shopping list, its copy window, and the merchant's buy confirm.
@@ -483,7 +444,7 @@ local function Surfaces(c)
 
 	-- The family link windows.
 	Run(c, "family link", function()
-		local opened = ns.Family.ShowLink(ns.db, "exercise", ADDON, nil)
+		local opened = c.G.ForeverCore.Family.ShowLink(ns.db, "exercise", ADDON, nil)
 		local window = rawget(G, "ForeverFamilyLink")
 		if c.combat then
 			assert(opened == false, "a family link never opens in combat")
@@ -493,7 +454,7 @@ local function Surfaces(c)
 		end
 	end)
 	Run(c, "family support", function()
-		local opened = ns.Family.ShowSupport()
+		local opened = c.G.ForeverCore.Family.ShowSupport()
 		local window = rawget(G, "ForeverFamilyLink")
 		if c.combat then
 			assert(opened == false, "family support never opens in combat")

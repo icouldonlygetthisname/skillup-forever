@@ -55,6 +55,7 @@ c.auction[4306], c.auctionAge = 50, 3
 c.bags = { [4306] = 2, [2321] = 1 }
 equal(#c.G.SkillUpForever.API.ShoppingList(), 0, "no saved variables returns an empty list")
 c.Boot()
+c.ns.SetCollectMode("gather")
 c.maps = { [0] = { mapID = 10, name = "Darkshire" } }
 c.ns.NearestVendor(2321)
 c.ns.NearestVendor(2322)
@@ -72,7 +73,7 @@ c.G.Syndicator = {
 	},
 }
 local api = c.G.SkillUpForever.API
-equal(api.minor, 4, "API minor version")
+equal(api.minor, 6, "API minor version")
 local lists = api.ShoppingList()
 equal(#lists, 2, "both tracked professions are present")
 equal(lists[1].profession, "Blacksmithing", "profession names sort deterministically")
@@ -149,4 +150,219 @@ equal(
 	"fallback explains the single waypoint"
 )
 equal(c.ns.ShoppingTrip(111), false, "a route with nothing missing is refused")
+
+-- #553: a refresh redraws the same headings, row frames and empty state. Nothing from an earlier draw stays
+-- on the body, so text cannot pile up and each refresh leaks no frame.
+c.Fire("PLAYER_ENTERING_WORLD")
+c.Fire("VARIABLES_LOADED")
+c.Advance(0)
+c.ns.OpenShoppingList()
+local window = c.G.SkillUpForeverShoppingList
+local function Find(root, match)
+	for _, child in ipairs({ root:GetChildren() }) do
+		if match(child) then
+			return child
+		end
+		local found = Find(child, match)
+		if found then
+			return found
+		end
+	end
+end
+local body = Find(window, function(region)
+	return region.width == 550
+end)
+assert(body, "the shopping list body was built")
+local function WithText(key)
+	local found = {}
+	for _, child in ipairs({ body:GetChildren() }) do
+		if child.text == key then
+			found[#found + 1] = child
+		end
+	end
+	return found
+end
+local headingTexts = {
+	c.ns.L["Gather"],
+	c.ns.L["Vendor"],
+	c.ns.L["Auction house"],
+	c.ns.L["Unknown"],
+}
+for _, key in ipairs(headingTexts) do
+	equal(#WithText(key), 1, "one " .. key .. " heading after the first refresh")
+end
+equal(#WithText(c.ns.L["No tracked profession"]), 0, "no empty text while rows show")
+
+local tracked = c.ns.db.trackedProfessions
+c.ns.db.trackedProfessions = {}
+c.ns.Changed("tracking")
+equal(#WithText(c.ns.L["No tracked profession"]), 1, "one empty text region, not one per refresh")
+equal(WithText(c.ns.L["No tracked profession"])[1]:IsShown(), true, "the empty text shows with no rows")
+for _, key in ipairs(headingTexts) do
+	equal(#WithText(key), 1, "the " .. key .. " heading is reused by an empty refresh")
+	equal(WithText(key)[1]:IsShown(), false, "and hidden when it has no rows")
+end
+local pooled = #body.children
+
+c.ns.db.trackedProfessions = tracked
+c.ns.Changed("tracking")
+equal(#body.children, pooled, "a refresh with rows again leaks no frame")
+for _, key in ipairs(headingTexts) do
+	equal(#WithText(key), 1, "one " .. key .. " heading after the second refresh with rows")
+	equal(WithText(key)[1]:IsShown(), true, "and the heading shows again")
+end
+equal(#WithText(c.ns.L["No tracked profession"]), 1, "one empty text region after both states")
+equal(WithText(c.ns.L["No tracked profession"])[1]:IsShown(), false, "empty text hidden when rows show again")
+
+-- The copy window has its own title and opens beside the list it copies.
+local copyButton
+for _, child in ipairs({ window:GetChildren() }) do
+	if child.text == c.ns.L["Copy list"] then
+		copyButton = child
+	end
+end
+assert(copyButton, "the Copy list button was built")
+copyButton.scripts.OnClick(copyButton)
+local copyWindow = c.G.SkillUpForeverShoppingCopy
+assert(copyWindow, "the copy window was built")
+equal(copyWindow.title, c.ns.L["Copy shopping list"], "the copy window has its own title")
+local anchor = copyWindow.points[1]
+equal(anchor[1], "TOPLEFT", "the copy window anchors from its top left")
+equal(anchor[2], window, "to the shopping list window")
+equal(anchor[3], "TOPRIGHT", "beside it")
+equal(anchor[4], 8, "with a small gap")
+equal(anchor[5], 0, "level with its top")
+
+-- The client calls an OnDragStart handler as handler(self, button). Handing it a bare StartMoving reference made
+-- the button string its alwaysStartFromMouse argument, so each window's handler starts the move with no argument.
+local function MovesWithoutArguments(target, label)
+	local started = {}
+	target.StartMoving = function(self, ...)
+		started[#started + 1] = { self = self, args = { ... } }
+	end
+	target.scripts.OnDragStart(target, "LeftButton")
+	target.StartMoving = nil
+	equal(#started, 1, label .. " starts a move when the client begins a drag")
+	equal(started[1].self, target, label .. " moves itself")
+	equal(#started[1].args, 0, label .. " passes StartMoving no argument")
+end
+MovesWithoutArguments(window, "the shopping list")
+MovesWithoutArguments(copyWindow, "the copy window")
+
+-- #622: focusing the copy box selects the list. The client calls the focus handler as handler(self, isUserInput),
+-- so a bare HighlightText reference took the flag as its start index, raised, and left the list unselected.
+local copyEdit = Find(copyWindow, function(region)
+	return region.scripts.OnEditFocusGained ~= nil
+end)
+assert(copyEdit, "the copy box gains focus through a script")
+copyEdit.highlighted = nil
+copyEdit.scripts.OnEditFocusGained(copyEdit, true)
+equal(copyEdit.highlighted, copyEdit.text, "the focus handler selects the whole list")
+copyEdit:ClearFocus()
+copyEdit.highlighted = nil
+copyEdit:SetFocus()
+equal(copyEdit.highlighted, copyEdit.text, "gaining focus through the client selects the whole list")
+
+-- #566: opening from a route page shows only that profession's plan, and a profession with nothing tracked
+-- says so instead of showing another tracked profession's materials.
+local LEATHERWORKING, COOKING, BLACKSMITHING = 165, 185, 164
+local LW_RECIPE, COOK_RECIPE = 11, 12
+local LW_ITEM, COOK_ITEM = 1101, 1201
+local scoped = Client.load({
+	boot = false,
+	saved = {
+		routeTargets = { [LEATHERWORKING] = 60, [COOKING] = 70 },
+		trackedProfessions = { [LEATHERWORKING] = true, [COOKING] = true },
+	},
+	data = {
+		Thresholds = { [LW_RECIPE] = { 1, 30, 45, 60 }, [COOK_RECIPE] = { 1, 30, 45, 60 } },
+		RecipeData = {
+			[LW_RECIPE] = { skillLine = LEATHERWORKING, reagents = { { itemID = LW_ITEM, quantity = 1 } } },
+			[COOK_RECIPE] = { skillLine = COOKING, reagents = { { itemID = COOK_ITEM, quantity = 1 } } },
+		},
+		TrainerFees = {},
+		TrainerRanks = {},
+		RankBooks = {},
+		ItemSellPrices = {},
+		GatheredBy = {},
+		LootedFrom = {},
+		VendorPrices = {},
+		ProfessionTrainers = {},
+		ScrollDrops = {},
+		WorldDrops = {},
+	},
+})
+scoped.professions = {
+	{ name = "Leatherworking", rank = 50, max = 75, id = 8165 },
+	{ name = "Cooking", rank = 50, max = 75, id = 8185 },
+	{ name = "Blacksmithing", rank = 50, max = 75, id = 8164 },
+}
+scoped.spells[LW_RECIPE], scoped.spells[COOK_RECIPE] = "Cured Leather", "Cooked Meat"
+scoped.known[LW_RECIPE], scoped.known[COOK_RECIPE] = true, true
+scoped.items[LW_ITEM], scoped.items[COOK_ITEM] = { name = "Light Leather" }, { name = "Raw Meat" }
+scoped.auction[LW_ITEM], scoped.auction[COOK_ITEM] = 10, 20
+scoped.Boot()
+scoped.Fire("PLAYER_ENTERING_WORLD")
+scoped.Fire("VARIABLES_LOADED")
+scoped.Advance(0)
+local function VisibleTexts(root)
+	local texts = {}
+	local function Walk(frame, visible)
+		visible = visible and frame:IsShown()
+		if visible and frame.text then
+			texts[#texts + 1] = frame.text
+		end
+		for _, child in ipairs({ frame:GetChildren() }) do
+			Walk(child, visible)
+		end
+	end
+	Walk(root, root:IsShown())
+	return table.concat(texts, "\n")
+end
+scoped.ns.OpenShoppingList(LEATHERWORKING)
+local scopedWindow = scoped.G.SkillUpForeverShoppingList
+local scopedBody = Find(scopedWindow, function(region)
+	return region.width == 550
+end)
+assert(scopedBody, "the scoped shopping list body was built")
+local scopedText = VisibleTexts(scopedBody)
+equal(scopedText:find("Light Leather", 1, true) ~= nil, true, "the asked-for profession's row shows")
+equal(scopedText:find("Raw Meat", 1, true), nil, "another tracked profession's row stays out")
+local summaryText = VisibleTexts(scopedWindow)
+equal(
+	summaryText:find(string.format(scoped.ns.L["%s to %d"], "Leatherworking", 60), 1, true) ~= nil,
+	true,
+	"the summary names the asked-for profession"
+)
+equal(summaryText:find("Cooking", 1, true), nil, "and not another tracked profession")
+scoped.ns.OpenShoppingList(BLACKSMITHING)
+local untrackedText = VisibleTexts(scopedWindow)
+equal(
+	untrackedText:find(string.format(scoped.ns.L["Nothing is tracked for %s."], "Blacksmithing"), 1, true) ~= nil,
+	true,
+	"an untracked profession says nothing is tracked for it"
+)
+equal(untrackedText:find("Raw Meat", 1, true), nil, "and no Cooking rows show")
+equal(untrackedText:find(scoped.ns.L["No tracked profession"], 1, true) ~= nil, true, "the empty message shows")
+
+-- The Shopping list's Auction house section says how the Auctionator list works (#554): its name, where it
+-- lives, and that each row is a click. With Buy reagents off it says turning it on writes the list, and
+-- without Auctionator it says the bar searches the game's own box.
+local offNote = c.ns.AuctionListNote({ "SkillUp: Tester-Realm: Tailoring" })
+equal(
+	offNote:find("Turning Buy reagents on writes an Auctionator list", 1, true) ~= nil,
+	true,
+	"with Buy reagents off the section says how to get the list"
+)
+c.ns.SetCollectMode("auction")
+local onNote = c.ns.AuctionListNote({ "SkillUp: Tester-Realm: Tailoring", "SkillUp: Tester-Realm: Blacksmithing" })
+equal(onNote:find("Auctionator list: SkillUp: Tester-Realm: Tailoring", 1, true) ~= nil, true, "it names the list")
+equal(onNote:find("Open the auction house, Shopping tab, pick it and Search", 1, true) ~= nil, true, "where it is")
+equal(onNote:find("buy each row with a click", 1, true) ~= nil, true, "and that buying stays one click a row")
+local noAuctionator = Client.load({ auctionator = false, boot = false })
+equal(
+	noAuctionator.ns.AuctionListNote(nil):find("game's own auction box one reagent at a time", 1, true) ~= nil,
+	true,
+	"without Auctionator it says the bar searches the game's own box one at a time"
+)
 Client.report("shopping list")

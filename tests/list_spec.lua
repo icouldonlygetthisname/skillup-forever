@@ -21,6 +21,21 @@ local function Region()
 		SetTextColor = function(self, r, g, b)
 			self.color = { r, g, b }
 		end,
+		SetAtlas = function(self, atlas)
+			self.atlas = atlas
+		end,
+		SetStatusBarTexture = function(self, texture)
+			self.statusBarTexture = texture
+		end,
+		CreateMaskTexture = function()
+			return Region()
+		end,
+		AddMaskTexture = function(self, mask)
+			self.mask = mask
+		end,
+		SetTexture = function(self, texture)
+			self.texture = texture
+		end,
 		SetShown = function(self, shown)
 			self.shown = shown
 		end,
@@ -182,6 +197,11 @@ equal(row.Detail.text, "18 crafts to 90, 54s", "the facts are on the line under 
 equal(Anchor(row.Detail, "TOPLEFT")[2], row.Text, "under the name")
 equal(Anchor(row.Detail, "TOPLEFT")[3], "BOTTOMLEFT", "at its bottom left")
 
+equal(row.BarBg.atlas, "common-stat-bar-BG", "item progress uses the native bar background")
+equal(row.Bar.statusBarTexture.atlas, "common-stat-bar-white", "item progress uses the native bar fill")
+equal(row.BarMask.atlas, "common-stat-bar-Mask", "the client's bar mask")
+equal(row.Bar.statusBarTexture.mask, row.BarMask, "shapes the fill to the frame's track")
+
 -- The same pooled frame redrawn for a later element drops what the new element does not have.
 local pooled = Region()
 Materialize(list.rows[1], pooled)
@@ -203,6 +223,21 @@ equal(message.kind, "message", "and knows it is a message")
 equal(message.Text.text, list.rows[5].text, "with its text")
 equal(message.Text.wordWrap, true, "wrapped")
 
+-- The row that is the next step keeps its own gold highlight; every other row leaves it hidden (#574).
+list:Begin()
+list:Add({ text = "Next", current = true })
+list:Add({ text = "Later" })
+list:Finish()
+local current = Materialize(list.rows[1])
+equal(current.Current.shown, true, "the current row shows its highlight")
+equal(
+	current.Current.texture,
+	"Interface\\QuestFrame\\UI-QuestTitleHighlight",
+	"drawn with the quest log's own highlight bar"
+)
+local later = Materialize(list.rows[2])
+equal(later.Current.shown, false, "a row that is not the next step shows no highlight")
+
 -- A left click is the row's own and a right-click opens its menu, from the row; a row with only a menu still
 -- takes the mouse.
 local menus, clicks = {}, {}
@@ -212,10 +247,12 @@ env.MenuUtil = {
 		menus[#menus + 1] = { owner = owner, generator = generator }
 	end,
 }
--- Core/Core.lua is not loaded here: the row asks the namespace, which asks the client's MenuUtil.
-ns.ContextMenu = function(owner, generator)
-	return env.MenuUtil.CreateContextMenu(owner, generator)
-end
+-- ForeverCore is not loaded here: the row asks its shared menu, which asks the client's MenuUtil.
+env.ForeverCore = {
+	ContextMenu = function(owner, generator)
+		return env.MenuUtil.CreateContextMenu(owner, generator)
+	end,
+}
 local function Menu() end
 list:Begin()
 list:Add({
@@ -245,5 +282,26 @@ Materialize(list.rows[2], clickable)
 equal(mouse, true, "a row with only a menu takes the mouse")
 Materialize(list.rows[3], clickable)
 equal(mouse, false, "a row with nothing to do does not")
+
+-- A train or buy line is wired through the same helper as a row: its own click and its menu.
+local lineClicks = {}
+local function LineMenu() end
+list:Begin()
+list:Line({
+	text = "Train Journeyman",
+	click = function(clicked)
+		lineClicks[#lineClicks + 1] = clicked
+	end,
+	menu = LineMenu,
+})
+list:Finish()
+local line = Materialize(list.rows[1])
+equal(line.kind, "line", "a train step is a line")
+line.scripts.OnClick(line, "LeftButton")
+equal(lineClicks[1], line, "a line's left click is its own")
+line.scripts.OnClick(line, "RightButton")
+equal(#lineClicks, 1, "a line's right-click is not a left click")
+equal(menus[#menus].owner, line, "a line opens its menu on itself")
+equal(menus[#menus].generator, LineMenu, "filled by the line's menu")
 
 Client.report("list_spec")

@@ -8,6 +8,7 @@
 --   * protected functions called from tainted code are forbidden (ADDON_ACTION_FORBIDDEN);
 --   * from tainted code, a missing non-nilable argument raises the client's usage error.
 local Secret = require("veil")
+local Docs = require("docs")
 
 local M = {}
 
@@ -335,6 +336,18 @@ function M.build(sim)
 		protectedNames[name] = true
 	end
 
+	-- The wiki's classes for a restricted function, overridden by observed client behaviour. A name with no applying
+	-- class keeps the pre-class combat-only rule.
+	local function restrictedNow(name)
+		local classes
+		if sim.restrictionClasses then
+			classes = sim.restrictionClasses(name)
+		elseif sim.docs and sim.docs.restrictionClasses then
+			classes = sim.docs.restrictionClasses(name)
+		end
+		return Docs.applies(classes or { "untagged" }, sim.combatLockdown, sim.hardwareInput)
+	end
+
 	local function stub(qualified, fdoc)
 		local nargs = #(fdoc.Arguments or {})
 		local protected = fdoc.IsProtectedFunction or protectedNames[qualified]
@@ -375,7 +388,7 @@ function M.build(sim)
 			end
 			-- HasRestrictions alone is a combat-time restriction; a documented function this client refuses at all
 			-- times is in protectedNames instead.
-			local refused = protected or (restricted and sim.combatLockdown)
+			local refused = protected or (restricted and restrictedNow(qualified))
 			if refused and tainted then
 				sim.forbidden(qualified)
 				return
@@ -384,8 +397,11 @@ function M.build(sim)
 			local out
 			if impl then
 				out = { n = 0 }
-				-- The C function's synchronous Blizzard Lua runs in the caller's taint (Taint.callSecure).
-				local r = { Taint.callSecure(impl, ...) }
+				-- SettingsPanel's restricted C opener enters Blizzard's panel callback through an engine-owned
+				-- secure boundary. This is deliberately per-native, not a change to securecallfunction or C APIs generally.
+				local call = qualified == "C_SettingsUtil.OpenSettingsPanel" and Taint.securecallIsolated
+					or Taint.callSecure
+				local r = { call(impl, ...) }
 				out.n = table.maxn(r)
 				for i = 1, out.n do
 					out[i] = r[i]

@@ -41,6 +41,10 @@ c.professions = {
 	{ name = "Mining", icon = 136248, rank = 50, max = 75, id = 8186 },
 }
 c.Boot()
+ns.SetCollectMode("gather")
+-- The tracker section joins the shared column once the world loads, as core's own sections do.
+c.EnterWorld()
+c.Advance(0)
 
 ---@return SkillUpPlan
 local function Plan()
@@ -76,7 +80,9 @@ c.AuctionatorScan()
 equal(ns.Price(ORE).copper, 5, "the vendor sell price is the floor")
 equal(ns.Price(ORE).worth, "vendor", "and is where the value came from")
 equal(ns.PriceSourceText(ns.Price(ORE)), "you gather it (Mining), valued at its vendor sell price", "said so")
-equal(Plan().crafts[1].recipeID, FROM_ORE, "worth little, the ore recipe is back")
+equal(Plan().crafts[1].recipeID, FROM_FLUX, "a cheaper price alone does not swap the route being followed")
+ns.Changed("replan")
+equal(Plan().crafts[1].recipeID, FROM_ORE, "asking for a route afresh, worth little, the ore recipe is back")
 
 -- With no auction price at all, the vendor sell price alone; a secret sell price is never computed with.
 c.auction[ORE] = nil
@@ -99,17 +105,18 @@ ns.SetCollectMode("auction")
 equal(ns.Price(ORE).source, "auctionator", "Buy reagents buys gathered materials at the auction house")
 equal(ns.Price(ORE).copper, 100, "at the full auction price")
 
--- With nothing to buy it at, ore this character mines is still priced as gathered, so turning Buy reagents on
--- never leaves the recipes that use it out of the route (#162).
+-- With nothing to buy it at, ore this character mines stays on the route as an auction price unknown, so
+-- turning Buy reagents on never leaves the recipes that use it out (#162, #559).
 c.auction[ORE] = nil
 c.AuctionatorScan()
-equal(ns.Price(ORE).source, "gather", "Buy reagents with no price for the ore: it is gathered")
-equal(ns.Price(ORE).copper, 5, "valued at what it sells for, with Value gathered materials on")
+equal(ns.Price(ORE).source, "auction", "Buy reagents with no price for the ore: it is bought there")
+equal(ns.Price(ORE).unknown, true, "as a price unknown")
+equal(ns.Price(ORE).copper, 0, "that costs nothing in the plan")
 c.SetSetting("valueGathered", false)
-equal(ns.Price(ORE).copper, 0, "and free with it off")
 equal(Plan().crafts[1].recipeID, FROM_ORE, "so the route still crafts from it")
 ns.SetCollectMode("gather")
-equal(ns.Price(ORE).copper, 0, "off again, gathering is free")
+equal(ns.Price(ORE).source, "gather", "off again, gathering is where it comes from")
+equal(ns.Price(ORE).copper, 0, "and it is free")
 c.auction[ORE] = 100
 c.AuctionatorScan()
 
@@ -142,11 +149,9 @@ local function MenuDescription()
 	return description
 end
 local root = MenuDescription()
-c.G.MenuUtil = {
-	CreateContextMenu = function(owner, generator)
-		generator(owner, root)
-	end,
-}
+c.G.ForeverCore.ContextMenu = function(owner, generator)
+	generator(owner, root)
+end
 ns.SetTracked(164, true)
 local block = c.Tracker()[1]
 local module = c.G.SkillUpForeverObjectiveTracker
@@ -202,20 +207,20 @@ plan = Plan()
 equal(#plan.crafts, 0, "nothing left to craft")
 equal(ns.RouteBlocked(plan), "Nothing you know skills up past 1.", "says so the usual way")
 
--- /su skipped lists them with their IDs, and /su unskip shows one, or all, again.
+-- /skillup skipped lists them with their IDs, and /skillup unskip shows one, or all, again.
 local SlashCommand = c.G.SlashCmdList.SKILLUPFOREVER
 c.chat = {}
 SlashCommand("skipped")
-equal(c.chat[1]:find("Skipped (2):", 1, true) ~= nil, true, "/su skipped counts them")
+equal(c.chat[1]:find("Skipped (2):", 1, true) ~= nil, true, "/skillup skipped counts them")
 equal(c.chat[2]:find("Copper Chain Belt (101)", 1, true) ~= nil, true, "and names each with its ID")
 SlashCommand("unskip 101")
-equal(ns.IsSkipped(FROM_ORE), false, "/su unskip shows one again")
+equal(ns.IsSkipped(FROM_ORE), false, "/skillup unskip shows one again")
 equal(Plan().crafts[1].recipeID, FROM_ORE, "and the route uses it again")
 c.chat = {}
 SlashCommand("unskip 999")
-equal(c.chat[1]:find("/su skipped lists", 1, true) ~= nil, true, "an ID that isn't skipped says how to find one")
+equal(c.chat[1]:find("/skillup skipped lists", 1, true) ~= nil, true, "an ID that isn't skipped says how to find one")
 SlashCommand("unskip all")
-equal(ns.IsSkipped(FROM_FLUX), false, "/su unskip all shows every one again")
+equal(ns.IsSkipped(FROM_FLUX), false, "/skillup unskip all shows every one again")
 equal(ns.db.skippedRecipes["Tester-Realm"], nil, "leaving nothing saved")
 c.chat = {}
 SlashCommand("skipped")

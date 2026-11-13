@@ -1,7 +1,7 @@
 ---@meta
 
 -- One /skillup command: its word and aliases, the arguments it accepts (nil accepts any), its handler and the line
--- /su help prints (nil for a command the help leaves out).
+-- /skillup help prints (nil for a command the help leaves out).
 ---@class SkillUpSlashCommand
 ---@field word string
 ---@field aliases? string[]
@@ -11,19 +11,16 @@
 
 -- The client passes this same table to each TOC file; no runtime import is available.
 ---@class SkillUpNamespace
----@field PeerStats ForeverPeerStatsNamespace
----@field Leaderboards? ForeverLeaderboardsAPI
----@field LeaderboardsData? ForeverLeaderboardsData
+---@field Credits ForeverCreditsData the player credits Data/Credits.lua generates for the shared Thanks page
 ---@field Stats SkillUpStats
 ---@field RecipeMaterials fun(recipeID: integer, crafts: number): SkillUpSubCraft[]?, {itemID: integer, count: number}[]?
 ---@field ReportTitle string the localized title shown by the shared report window
 ---@field Art SkillUpArt
----@field TrackerHost? ForeverTrackerHostAPI
----@field TrackerHostSettings fun(): ForeverTrackerSettings
----@field Family ForeverFamilyAPI
+---@field core ForeverCoreAddon the shared services registered for SkillUp (Core/Core.lua)
+---@field broken? boolean set when an installed ForeverCore is too old, so the addon's files stop
+---@field ForeverRequire fun(ready: boolean): boolean? the shared out-of-date warning (Core/ForeverRequire.lua)
 ---@field Print fun(msg: string)
 ---@field GamepadUI fun(): boolean Whether the client is in its gamepad interface.
----@field ContextMenu fun(owner: Frame, generator: fun(owner: Frame, root: RootMenuDescriptionProxy)): any Opens a Blizzard context menu, or under the gamepad interface shows a line instead and returns nil.
 ---@field StepDropdownUnderGamepad fun(dropdown: DropdownButton) Makes a press on the dropdown step to its next choice under the gamepad interface instead of opening a menu.
 ---@field Changed fun(kind: SkillUpChange)
 ---@field WhenStale fun(name: SkillUpStale, handler: fun())
@@ -44,8 +41,8 @@
 ---@field IsSkipped fun(recipeID: integer): boolean
 ---@field SetSkipped fun(recipeID: integer, skip: boolean)
 ---@field SkippedRecipes fun(skillLine: integer?): {recipeID: integer, name: string}[]
----@field AddPinnedMenu fun(description: RootMenuDescriptionProxy|ElementMenuDescriptionProxy, skillLine: integer)
----@field AddSkippedMenu fun(description: RootMenuDescriptionProxy|ElementMenuDescriptionProxy, skillLine: integer)
+---@field AddPinnedMenu fun(description: ForeverMenuDescription, skillLine: integer)
+---@field AddSkippedMenu fun(description: ForeverMenuDescription, skillLine: integer)
 ---@field SkillContext fun(): SkillUpContext?
 ---@field PlayerProfessions fun(): table<integer, SkillUpProfession>
 ---@field IsLearned fun(recipeID: integer): boolean
@@ -64,8 +61,6 @@
 ---@field NetCost fun(recipeID: integer): number?
 ---@field InitPrices fun()
 ---@field AttachRecipeList fun()
----@field FitRecipeListWidth fun() fit the open profession's recipe list, and the window with it, to its longest name
----@field FitFrameArt fun(extra: number) redraw the frame's art for that much widening, or the stock art at 0
 ---@field RouteProfessions fun(): table<integer, SkillUpProfession>
 ---@field CraftedGear fun(level: number, classID: integer): SkillUpGearSlot[]
 ---@field BuffLevel fun(recipeID: integer): integer? The product's required level when it is a buff, else nil.
@@ -76,20 +71,10 @@
 ---@field TrainingFor fun(profession: SkillUpContext, recipeID: integer): number[]?
 ---@field TrainerChecks fun(): SkillUpTrainerCheck[]
 ---@field TrainerReport fun(): string[]
----@field TrainerExport fun(): string[] the requirements trainers showed, as a SEEN_REQUIREMENTS table literal (/su export)
----@field AuditLines fun(): string[]? /su audit's lines with a profession open, nil with none
----@field ReportLines fun(): string[] SkillUp's own lines in /su report (Core/Report.lua)
----@field Report ForeverReportModule the report window (UI/Report.lua)
+---@field TrainerExport fun(): string[] the requirements trainers showed, as a SEEN_REQUIREMENTS table literal (/skillup export)
+---@field AuditLines fun(): string[]? /skillup audit's lines with a profession open, nil with none
+---@field ReportLines fun(): string[] SkillUp's own lines in /skillup report (Core/Report.lua)
 ---@field SlashCommands SkillUpSlashCommand[] the /skillup commands, in dispatch and help order
----@field SafeCall fun(label: string, fn: function, ...: any): boolean, ... run fn as pcall does, keeping a failure for /su report and passing it to the error handler (Core/SafeCall.lua)
----@field RecordError fun(label: string, message: any, stack?: string) keep an error caught some other way for the report
----@field CaughtErrors fun(): ForeverCaughtError[] this session's caught errors, oldest first, as copies
----@field AttachErrorJournal fun(store: table) keep the journal in the saved table, so a /reload keeps it (Core/Core.lua)
----@field Log fun(level: string, topic: string, message: any, ...: any) one line in the shared ring (Core/Log.lua)
----@field LogLines fun(count?: integer): string[] the newest log lines, oldest first, as copies (Core/Log.lua)
----@field AttachLog fun(store: table) keep the log ring in the saved table, so a /reload keeps it (Core/Core.lua)
----@field DebugCommand fun(argument?: string): boolean `/forever debug`: toggle, pin, off or show (Core/Log.lua)
----@field CutText fun(text: string, limit: integer): string `text` at most `limit` bytes, cut on a character boundary with "..."
 ---@field RankName fun(cap: number): string?
 ---@field RecipeBands fun(profession: SkillUpContext, recipeID: integer): SkillUpBand[]
 ---@field LearnSource fun(profession: SkillUpContext, recipeID: integer): SkillUpLearnSource?
@@ -104,13 +89,14 @@
 ---@field DominantReagent fun(plan: SkillUpPlan): { itemID: integer, need: integer, share: number }?
 ---@field RouteNotice fun(plan: SkillUpPlan): { itemID: integer, need: integer, recipes: integer }?
 ---@field PlanRoute fun(profession: SkillUpProfession): SkillUpPlan
+---@field RouteFollowable fun(plan: SkillUpPlan): boolean Whether every step of a route can still be walked
 ---@field TargetChanged fun(skillLine: integer, value: number): boolean Whether committing a route target would change it
 ---@field RankText fun(rank: SkillUpRank): string
 ---@field RankBookName fun(rank: SkillUpRank): string
 ---@field RankQuestName fun(rank: SkillUpRank): string
 ---@field PlayerSide fun(): 'A'|'H'|nil
 ---@field RankHeld fun(rank: SkillUpRank): boolean
----@field PlanCost fun(plan: SkillUpPlan): number
+---@field PlanMoney fun(plan: SkillUpPlan): { buy: number, fees: number, sells: number, unknown: integer }
 ---@field StepCost fun(recipeID: integer, crafts: number): number What a step's crafts cost, every craft at its net
 ---@field CreateList fun(parent: Frame): SkillUpList
 ---@field NextCraft fun(plan: SkillUpPlan): SkillUpCraft
@@ -138,12 +124,10 @@
 ---@field SetLastBuffProfession fun(skillLine: integer)
 ---@field PageParts SkillUpPageParts
 ---@field Pages SkillUpPages
----@field PlaceSideTabs fun()
 ---@field RegisterSettings fun()
 ---@field SetSortMode fun(mode: string)
 ---@field SetBuffsOnly fun(on: boolean)
 ---@field OpenSettings fun()
----@field OpenSettingsPanel fun(categoryID?: integer, element?: string): boolean Blizzard's settings panel, opened through the client's secure opener (Core/OpenSettings.lua)
 ---@field HasAuctionator fun(): boolean
 ---@field HasTradeSkillMaster fun(): boolean
 ---@field WithItemNames fun(items: SkillUpShoppingItem[], callback: fun())
@@ -156,8 +140,11 @@
 ---@field LayoutSkillBar fun(bar: SkillUpBar, t: number[], skill: number): SkillUpBar
 ---@field DetailsBar fun(t: number[]?, skill: number?): number[]?, number? the details pane's bar: thresholds and skill, nil without either
 ---@field DetailsBarRecipe fun(info: TradeSkillRecipeInfo?): integer? the recipe the details bar draws
+---@field DetailsBarAnchor fun(form: SkillUpSchematicForm): FontString? the pane's frame the bar sits under
+---@field DetailsBarRoom fun(form: SkillUpSchematicForm, anchor: FontString, height: number): boolean? whether the pane leaves the bar its room, nil before it is laid out
 ---@field AuctionatorAutoscan fun(): boolean?
 ---@field AuctionListName fun(profession: string): string?
+---@field AuctionListNote fun(names: string[]?): string what the Shopping list and the Search tooltip say about the list
 ---@field Have fun(itemID: integer): number
 ---@field Readable fun(value: any): any
 ---@field Usable fun(frame?: Frame): boolean
@@ -179,9 +166,10 @@
 ---@field ShoppingList fun(skillLineID?: integer): SkillUpAPIShoppingProfession[]
 ---@field ShoppingText fun(skillLineID?: integer): string
 ---@field ShoppingTrip fun(skillLineID?: integer): boolean
----@field OpenShoppingList fun()
+---@field OpenShoppingList fun(skillLine?: integer)
 ---@field TrackerAttached fun(): boolean
 ---@field SetTracked fun(skillLine: integer, tracked: boolean)
+---@field SetTrackedByPlayer fun(skillLine: integer, tracked: boolean)
 ---@field AutoTrack fun(skillLine?: integer): boolean
 ---@field InitShopping fun()
 ---@field NPCLocation fun(npcID: integer): SkillUpLocation
@@ -204,6 +192,7 @@
 ---@field AddQuestChainHint fun(tooltip: GameTooltip)
 ---@field AnnounceUpdate fun()
 ---@field WHATS_NEW string
+---@field WHATS_NEW_VERSION string the release whose headline WHATS_NEW is
 ---@field FormatNet fun(copper: number, profit: boolean): string
 ---@field FormatSigned fun(copper: number, profit: boolean): string
 ---@field PriceAge fun(price: SkillUpPrice): number?
@@ -219,6 +208,7 @@
 ---@field RECIPE_TOOLTIP_OPTIONS string[][]
 ---@field ROW_COST_OPTIONS string[][]
 ---@field TITLE string
+---@field ICON string the client icon every in-game identity surface draws, read from ## X-Forever-Icon
 ---@field L table<string, string> English phrase to the client locale's translation, else the phrase
 ---@field COLORS table<string, ColorMixin>
 ---@field Model SkillUpModel
@@ -252,13 +242,8 @@
 ---@field InitCatalogue fun()
 
 ---@class SkillUpDefaults
----@field statsShare boolean
 ---@field observedRecipes table<string, {ids: table<integer, true>, eventUnix: number}>
----@field peerStats table<string, table>
----@field errors ForeverCaughtError[] the shared error journal (Core/SafeCall.lua): earlier sessions' errors, for the report
----@field log ForeverDebugLogStore the shared log ring (Core/Log.lua): recent lines, for the report
 ---@field showRowText boolean
----@field wideRecipeList boolean
 ---@field showUnlearned boolean
 ---@field buffsOnly boolean
 ---@field showSkill boolean
@@ -312,8 +297,10 @@
 ---@field items table<integer, true>
 
 ---@class SkillUpDB : SkillUpDefaults, ForeverFamilyDB
----@field trackerHost? ForeverTrackerSettings
+---@field trackerHost? ForeverTrackerLegacySettings the addon's old tracker table, offered to Forever Core once
 ---@field showReagentTooltip? boolean Legacy migration only.
+---@field priceDays? table Legacy migration only.
+---@field latestPrice? number Legacy migration only.
 ---@field scanAuctions? boolean Legacy migration only.
 ---@field tracked? table<integer, boolean> Legacy migration only.
 ---@field auctions? table Legacy migration only.
@@ -412,6 +399,12 @@ SkillUpForeverDB = nil
 ---@field training? SkillUpPlanTraining
 ---@field subcraft? SkillUpSubCraft
 ---@field craft? SkillUpPlanCraft
+---@field band? SkillUpPlanBand The skill band the step is walked in.
+
+---@class SkillUpPlanBand
+---@field name string The rank whose cap the band ends at.
+---@field from number The skill it starts at.
+---@field cap number The skill cap it ends at.
 
 ---@class SkillUpBand
 ---@field color 'orange'|'yellow'|'green'|'grey'
@@ -449,6 +442,7 @@ SkillUpForeverDB = nil
 ---@field target number
 ---@field reached number Where the crafts get to: short of the target when the known recipes run out.
 ---@field steps SkillUpRouteStep[]
+---@field bands SkillUpPlanBand[]
 ---@field crafts SkillUpPlanCraft[]
 ---@field training SkillUpPlanTraining[]
 ---@field ranks SkillUpRank[]
@@ -462,9 +456,9 @@ SkillUpForeverDB = nil
 ---@field count number
 
 -- What a writer or a game event says changed, and the caches and views Core/Changes.lua keeps fresh.
----@alias SkillUpChange 'recipes'|'window'|'skill'|'talents'|'professions'|'prices'|'bags'|'items'|'trackerNames'|'names'|'level'|'zone'|'merchant'|'fees'|'sources'|'target'|'tracking'|'settings'
----@alias SkillUpStale 'schematics'|'prices'|'plans'|'trackedNeeds'|'tooltipRoute'|'tooltipRouteTools'|'api'|'route'|'recipeList'|'tracker'|'trainer'|'routeTab'|'pages'|'gear'|'buffs'|'tooltipCache'|'tooltip'|'auctionSearch'|'detailsBar'|'shoppingList'
----@alias SkillUpPriceSource 'vendor'|'auctionator'|'tsm'|'gather'
+---@alias SkillUpChange 'recipes'|'window'|'skill'|'talents'|'professions'|'prices'|'bags'|'items'|'trackerNames'|'names'|'level'|'zone'|'merchant'|'fees'|'sources'|'target'|'tracking'|'settings'|'replan'
+---@alias SkillUpStale 'schematics'|'prices'|'plans'|'replan'|'bags'|'trackedNeeds'|'tooltipRoute'|'tooltipRouteTools'|'api'|'route'|'recipeList'|'tracker'|'trainer'|'routeTab'|'pages'|'gear'|'buffs'|'tooltipCache'|'tooltip'|'auctionSearch'|'detailsBar'|'shoppingList'
+---@alias SkillUpPriceSource 'vendor'|'auctionator'|'tsm'|'gather'|'auction'
 ---@alias SkillUpCollectMode 'gather'|'auction'
 ---@alias SkillUpShoppingSource 'gather'|'vendor'|'auction'|'unknown'
 ---@class SkillUpPrice
@@ -475,6 +469,7 @@ SkillUpForeverDB = nil
 ---@field profession? string Gathered reagents only: the profession that yields it.
 ---@field loot? boolean A reagent creatures drop, which any character can loot: no profession needed.
 ---@field worth? 'auction'|'vendor' Gathered reagents valued at what they sell for: which price that is.
+---@field unknown? boolean A gatherable with Buy reagents on that nothing has priced: it stays on the route.
 
 ---@class SkillUpValue
 ---@field copper number
@@ -565,21 +560,56 @@ SkillUpForeverDB = nil
 ---@field icon? fileID|string
 ---@field iconColor? ColorMixin The stock icon border's tint, the item's quality where it has one.
 ---@field detailColor? ColorMixin
+---@field bar? { have: number, need: number } A have/need bar under the name.
+---@field barColor? ColorMixin
+---@field sourceIcon? string The client atlas naming where the reagent comes from.
+---@field current? boolean The route's next step, drawn in gold.
 ---@field tooltip? fun(tooltip: GameTooltip)
 ---@field click? fun(row: SkillUpListRow) A left click.
----@field menu? fun(owner: Region, root: RootMenuDescriptionProxy) A right-click's context menu, filled as MenuUtil fills one.
+---@field menu? fun(owner: Region, root: ForeverMenuDescription) A right-click's context menu in the suite's shared menu.
 
 ---@class SkillUpListRow : Button
 ---@field kind "row"
 ---@field entry SkillUpListEntry
 ---@field Icon Texture
 ---@field IconBorder Texture
+---@field Source Texture
+---@field Text FontString
+---@field Detail FontString
+---@field BarBg Texture
+---@field Bar StatusBar
+---@field BarMask MaskTexture
+---@field BarText FontString
+---@field Current Texture The gold highlight on the row that is the next step.
+---@field barHave? number
+---@field barNeed? number
+---@field current? boolean
+---@field tooltip? fun(tooltip: GameTooltip)
+---@field click? fun(row: SkillUpListRow)
+---@field menu? fun(owner: Region, root: ForeverMenuDescription)
+---@field UpdateTooltip fun(self: SkillUpListRow) called by the tooltip this row owns, a few times a second
+
+---@class SkillUpListBand : Frame
+---@field kind "band"
+---@field Name FontString
+---@field Range FontString
+---@field BarBg Texture
+---@field BarFill Texture
+---@field BarMask MaskTexture
+---@field BarWidth number
+---@field BarHeight number
+---@field BarText FontString
+
+---@class SkillUpListLine : Button
+---@field kind "line"
+---@field entry SkillUpListEntry
+---@field Icon Texture
 ---@field Text FontString
 ---@field Detail FontString
 ---@field tooltip? fun(tooltip: GameTooltip)
----@field click? fun(row: SkillUpListRow)
----@field menu? fun(owner: Region, root: RootMenuDescriptionProxy)
----@field UpdateTooltip fun(self: SkillUpListRow) called by the tooltip this row owns, a few times a second
+---@field click? fun(row: SkillUpListLine)
+---@field menu? fun(owner: Region, root: ForeverMenuDescription)
+---@field UpdateTooltip fun(self: SkillUpListLine) called by the tooltip this row owns, a few times a second
 
 ---@class SkillUpListHeading : Frame
 ---@field kind "heading"
@@ -590,10 +620,14 @@ SkillUpForeverDB = nil
 ---@field Text FontString
 
 ---@class SkillUpListElement
----@field kind "row"|"heading"|"message"
+---@field kind "row"|"band"|"line"|"heading"|"message"
 ---@field text? string The heading's or message's line.
 ---@field color? ColorMixin The message's colour; the list's own grey when nil.
----@field entry? SkillUpListEntry The row's item.
+---@field entry? SkillUpListEntry The row's or line's item.
+---@field name? string The band's rank name.
+---@field from? number The band's first skill.
+---@field cap? number The band's last skill.
+---@field skill? number The character's base skill, for the band's progress.
 
 ---@class SkillUpList
 ---@field rows SkillUpListElement[] The elements of the last render, in order.
@@ -601,6 +635,8 @@ SkillUpForeverDB = nil
 ---@field Begin fun(self: SkillUpList)
 ---@field Heading fun(self: SkillUpList, text: string)
 ---@field Message fun(self: SkillUpList, text: string, color?: ColorMixin)
+---@field Band fun(self: SkillUpList, name: string, from: number, cap: number, skill: number)
+---@field Line fun(self: SkillUpList, entry: SkillUpListEntry)
 ---@field Add fun(self: SkillUpList, entry: SkillUpListEntry)
 ---@field Finish fun(self: SkillUpList)
 
@@ -703,11 +739,10 @@ SkillUpForeverDB = nil
 ---@class SkillUpPages
 ---@field Register fun(spec: SkillUpPageSpec)
 ---@field Unlocked fun(fn: fun()): boolean
----@field Open fun()
 ---@field Close fun(id: SkillUpPageID)
 ---@field Select fun(id: SkillUpPageID)
 ---@field Sync fun()
----@field SideTab fun(): SkillUpSideTab?
+---@field SideTab fun(): ForeverProfessionTab?
 ---@field BottomTab fun(id: SkillUpPageID): Button?
 ---@field Count fun(): integer
 
@@ -801,6 +836,9 @@ SkillUpForeverDB = nil
 ---@field RowFrames SkillUpBuffRowFrame[]
 ---@field Axis Frame
 ---@field AxisContent Frame
+---@field HScroll SkillUpScrollBar
+---@field FadeLeft Frame
+---@field FadeRight Frame
 ---@field Legend Frame
 ---@field Detail SkillUpBuffDetail
 ---@field Level CheckButton
@@ -818,17 +856,32 @@ SkillUpForeverDB = nil
 ---@field ScrollOffset number
 ---@field Hi number
 
+---@class SkillUpRouteMoney : Frame
+---@field money? { buy: number, fees: number, sells: number, unknown: integer }
+---@field unpriced? integer
+
+-- The route's read-only count: the client's count box, with the spinner's arrows present but hidden.
+---@class SkillUpCraftCount : EditBox
+---@field IncrementButton Button
+---@field DecrementButton Button
+---@field MouseWheelCatcher Frame
+
 ---@class SkillUpPage : Frame
 ---@field Craft SkillUpCraftButton
+---@field CraftCount SkillUpCraftCount
 ---@field Profession DropdownButton
 ---@field Skill FontString
 ---@field Target EditBox
----@field Track Button
+---@field Money SkillUpRouteMoney
+---@field MoneyText FontString
+---@field Track CheckButton
+---@field TrackLabel FontString
 ---@field Collect CheckButton
 ---@field CollectLabel FontString
 ---@field collectChanges boolean? whether the Buy reagents switch changes the route last drawn
 ---@field Vendor Button
 ---@field ShoppingList Button
+---@field Replan Button
 ---@field vendorItems integer[]
 ---@field RouteList SkillUpList
 ---@field ReagentList SkillUpList
@@ -852,7 +905,7 @@ SkillUpForeverDB = nil
 ---@field recipeID? integer
 ---@field ambiguous? boolean
 
--- A bundled trainer requirement a visit could prove wrong (/su trainers).
+-- A bundled trainer requirement a visit could prove wrong (/skillup trainers).
 ---@class SkillUpTrainerCheck
 ---@field skillLine integer
 ---@field recipeID integer

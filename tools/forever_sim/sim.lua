@@ -64,6 +64,8 @@ Sim.CORE = {
 	"Blizzard_ActionBar/Shared/ActionButton.lua",
 	"Blizzard_ActionBar/Shared/ActionButtonComponentTemplate.xml",
 	"Blizzard_ActionBar/Mainline/ActionButtonTemplate.xml",
+	-- The Escape handler registry Blizzard_ActionBar loads at startup: addons register into its file-local list.
+	"Blizzard_GameMenuEsc",
 	-- The gamepad action bars are real: they are where UpdateInteractIcons makes its protected call. The action
 	-- bar templates above supply the buttons they inherit; the gamepad UI's own setup registers the target and
 	-- soft-interact callbacks and reacts to binding-set changes.
@@ -98,6 +100,9 @@ function Sim.new(opts)
 	sim.verbose = opts.verbose or os.getenv("FOREVER_SIM_VERBOSE") == "1"
 	sim.taint = Taint
 	sim.gaps = {}
+	-- True only while a hardware input's synchronous call runs, so a hardware-event restriction can refuse a call
+	-- made from a timer or an event.
+	sim.hardwareInput = false
 	-- The client's legacy LE_* constants are native and undocumented: client code reading one gets a distinct
 	-- number (recorded in sim.gaps), including when the reader runs tainted.
 	local leValue = 200000
@@ -117,6 +122,7 @@ function Sim.new(opts)
 	end
 	docsCache[sim.ui] = docsCache[sim.ui] or Docs.load(sim.ui)
 	sim.docs = docsCache[sim.ui]
+	sim.docs.restrictions()
 	sim.impl = {}
 	sim.started = os.clock()
 	require("client").build(sim)
@@ -146,10 +152,12 @@ function Sim.new(opts)
 	end
 	-- An addon's runtime chunk is instrumented with the marker bound as a local of a wrapper, so the chunk keeps it
 	-- under any environment the addon gives it (a data parser's setfenv(chunk, {})). The chunk name defaults to the
-	-- addon's own code, as the client's does.
+	-- addon's own code, as the client's does. The field helpers are locals for the same reason.
 	local rawLoadstring = loadstring
 	local Instrument = require("instrument")
-	local bind = "local " .. Instrument.MARKER .. " = ...; return function(...) "
+	local bind = "local __fsi_get, __fsi_set, __fsi_callm, __fsi_ctor, "
+		.. Instrument.MARKER
+		.. " = ...; return function(...) "
 	sim.G.loadstring = function(code, name)
 		local addon = Taint.current
 		local chunk, err
@@ -157,7 +165,7 @@ function Sim.new(opts)
 			if addon then
 				local wrapper
 				wrapper, err = rawLoadstring(bind .. Instrument.rewrite(code, addon) .. "\nend", name or code)
-				chunk = wrapper and wrapper(mark)
+				chunk = wrapper and wrapper(Taint.fieldGet, Taint.fieldSet, Taint.methodCall, Taint.constructor, mark)
 			else
 				chunk, err = rawLoadstring(Instrument.rewrite(code, nil), name or code)
 			end

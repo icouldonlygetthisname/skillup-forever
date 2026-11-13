@@ -31,6 +31,19 @@ sys.path.insert(0, str(WOWMOCK))
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "docs" / "screenshots"
+TOC_TEXT = (REPO / "SkillUpForever.toc").read_text(encoding="utf-8-sig")
+
+
+def toc_field(name):
+    """A TOC metadata value, such as the addon's one identity icon."""
+    return re.search(rf"^##\s*{re.escape(name)}:\s*(.*?)\s*$", TOC_TEXT, re.MULTILINE)[1]
+
+
+TOC_METADATA = dict(re.findall(r"^##\s*([^:]+):\s*(.*?)\s*$", TOC_TEXT, re.MULTILINE))
+# Every identity surface draws the icon the TOC declares, the same value the addon reads at load.
+IDENTITY_ICON = toc_field("X-Forever-Icon").replace("\\", "/").lower()
+if not IDENTITY_ICON.endswith(".blp"):
+    IDENTITY_ICON += ".blp"
 
 # ------------------------------------------------------------------------------------------ Data/*.lua
 
@@ -350,7 +363,7 @@ LEVEL = 20
 MONEY = 25000  # 2g 50s: every Apprentice fee is within reach, so the trainer's next pick can be any of them
 TOOLTIP_ITEM = 2318  # Light Leather
 
-# Loads the TOC's Lua files, except UI/TrackerHost.lua which the scene stubs, under luajit into recording stubs
+# Loads the TOC's Lua files under luajit into recording stubs
 # of the client (as tests/route_spec.lua does), runs the addon's start-up, opens its route page, lays out its
 # tracker section, decorates an Apprentice trainer's services and shows the reagent's item tooltip, and prints
 # what each would draw as JSON. Money is left as {coin:N} and item names as {item:N} for the renderer to fill in.
@@ -360,7 +373,7 @@ local ADDON = "SkillUpForever"
 local FILES = {}
 for line in io.lines(ADDON .. ".toc") do
 	local file = line:match("^([%w_\\]+%.lua)%s*$")
-	if file and file ~= "UI\\TrackerHost.lua" then
+	if file then
 		FILES[#FILES + 1] = (file:gsub("\\", "/"))
 	end
 end
@@ -471,6 +484,19 @@ local RECORDED = {
 	end,
 }
 
+local MINIMAL_SCROLLBAR_ATLASES = {
+	Track = {
+		Begin = "minimal-scrollbar-track-top",
+		End = "minimal-scrollbar-track-bottom",
+		Middle = "!minimal-scrollbar-track-middle",
+	},
+	Thumb = {
+		Begin = "minimal-scrollbar-small-thumb-top",
+		End = "minimal-scrollbar-small-thumb-bottom",
+		Middle = "minimal-scrollbar-small-thumb-middle",
+	},
+}
+
 local function Stub()
 	return setmetatable({ scripts = {} }, {
 		__index = function(self, key)
@@ -548,11 +574,22 @@ env = setmetatable({
 	SlashCmdList = {},
 	issecretvalue = false,
 	GameTooltip_Hide = function() end,
-	CreateFrame = function(_, name)
+	CreateFrame = function(_, name, _, template)
 		local frame = Stub()
 		created[#created + 1] = frame
 		if name then
 			named[name] = frame
+		end
+		-- Blizzard_SharedXML/Shared/Scroll/MinimalScrollBar.xml: the track's and thumb's caps and middle carry
+		-- their atlases from the template, which a horizontal bar reads back with GetAtlas.
+		local parts = template == "MinimalScrollBar" and MINIMAL_SCROLLBAR_ATLASES
+		for owner, atlases in pairs(parts or {}) do
+			local region = owner == "Track" and frame.Track or frame.Track.Thumb
+			for key, atlas in pairs(atlases) do
+				rawset(region[key], "GetAtlas", function()
+					return atlas
+				end)
+			end
 		end
 		return frame
 	end,
@@ -614,7 +651,7 @@ env = setmetatable({
 	GetLocale = function()
 		return "enUS"
 	end,
-	-- The client's error handler and string trim, which the shared journal (Core/SafeCall.lua) reads at load.
+	-- The client's error handler and string trim, which the addon's own code reads at load.
 	geterrorhandler = function()
 		return function() end
 	end,
@@ -686,8 +723,8 @@ env = setmetatable({
 		end,
 	},
 	C_AddOns = {
-		GetAddOnMetadata = function()
-			return "@project-version@"
+		GetAddOnMetadata = function(_, key)
+			return STATE.metadata[key]
 		end,
 	},
 	C_CurrencyInfo = {
@@ -867,13 +904,8 @@ env = setmetatable({
 	LibQuestieDB = false,
 	Syndicator = false,
 	TSM_API = false,
-	-- No other Forever addon has loaded UI/ForeverFamily.lua: this copy sets the global.
-	ForeverFamily = false,
-	ForeverLeaderboards = false,
-	ForeverPeerStats = false,
-	-- The error journal installs its own handler and event frame; BugSack is not installed here.
-	ForeverErrorJournal = false,
-	ForeverDebugLog = false,
+	-- ForeverCore's shared services; the scene below fills them in.
+	ForeverCore = false,
 	BugGrabber = false,
 }, {
 	__index = function(_, key)
@@ -885,13 +917,129 @@ env = setmetatable({
 	end,
 })
 
--- This renderer exercises Shopping.LayoutContents; native ownership is covered by tracker_host_spec.
+-- This renderer exercises Shopping.LayoutContents; native ownership is covered by ForeverCore's own specs.
 env._G = env
-local ns = { TrackerHost = {
+local function SafeCall(_, fn, ...)
+	return pcall(fn, ...)
+end
+local host = {
 	Attach = function(module) module.parentContainer = {} end,
 	IsAttached = function(module) return module.parentContainer ~= nil end,
-} }
-env.ForeverTrackerHost = ns.TrackerHost
+	GetSettings = function() return { attached = true, locked = false } end,
+	SetAttached = function() end,
+	SetLocked = function() end,
+	OnAttachmentChanged = function() end,
+}
+-- ForeverCore.ProfessionTabs, as far as the render needs it: one tab, its page shown when selected and hidden
+-- when the window goes back to the client's own page.
+local professionEntry, professionSelected
+local ProfessionTabs = {}
+function ProfessionTabs.Register(key, spec)
+	professionEntry = { key = key, spec = spec }
+	local tab = Stub()
+	tab.tooltipText = spec.tooltip
+	tab.Icon = Stub()
+	return tab
+end
+function ProfessionTabs.Select(key)
+	professionSelected = key
+	professionEntry.spec.page:Show()
+	if professionEntry.spec.onSelect then
+		professionEntry.spec.onSelect(key)
+	end
+end
+function ProfessionTabs.ShowNative()
+	professionSelected = nil
+	professionEntry.spec.page:Hide()
+end
+function ProfessionTabs.Selected()
+	return professionSelected
+end
+function ProfessionTabs.SetMinWidth(key, width)
+	if not professionEntry or professionEntry.key ~= key then
+		return
+	end
+	professionEntry.spec.minWidth = width
+end
+ProfessionTabs.minor = 2
+
+env.ForeverCore = {
+	API = 1,
+	ProfessionTabs = ProfessionTabs,
+	-- The shared API kit (ForeverCore's Core/APIKit.lua): a render subscribes to nothing and a read is answered from
+	-- the scene's own data, so the hub only has to exist.
+	APIKit = {
+		Hub = function()
+			return {
+				Queue = function() end,
+				Subscribe = function()
+					return function() end
+				end,
+			}
+		end,
+		NotReady = function(reason)
+			return nil, reason
+		end,
+	},
+	TrackerHost = host,
+	-- ForeverCore's TrackerSection, as far as the render needs it: core builds the section from the game's module
+	-- template, mixes the addon in and attaches it. The real Create defers the attach to the world loading; this
+	-- harness runs every deferred call at once, so the scene has the module by the time it draws.
+	TrackerSection = {
+		Create = function(name, mixin, opts)
+			opts = opts or {}
+			if not env.ObjectiveTrackerFrame then
+				return nil
+			end
+			local module = env.CreateFrame("Frame", name, env.UIParent, "ObjectiveTrackerModuleTemplate")
+			if mixin then
+				env.Mixin(module, mixin)
+			end
+			if opts.header then
+				module:SetHeader(opts.header)
+			end
+			if opts.safeCall then
+				module.safeCall = opts.safeCall
+			end
+			host.Attach(module, opts.show)
+			return module
+		end,
+	},
+	-- ForeverCore.TrackerLine: a stock line that takes the mouse. The tracker scene draws text only, and its lines
+	-- are recording stubs.
+	TrackerLine = { SetInteractive = function() end },
+	Register = function(_, spec)
+		return {
+			SafeCall = SafeCall,
+			Attach = function() end,
+			Report = { Show = function() end, Command = function() end },
+			MapCanvas = {},
+			title = spec and spec.title,
+		}
+	end,
+	PeerStats = {
+		New = function()
+			return {
+				Sync = function() end,
+				SetEnabled = function() end,
+				Board = function() return {} end,
+				WeekBoard = function() return {} end,
+				Revision = function() return 0 end,
+			}
+		end,
+	},
+	Leaderboards = { Register = function() end, Open = function() end },
+	Family = {
+		Register = function()
+			return Stub()
+		end,
+	},
+	OpenSettingsPanel = function() return true end,
+	OpenMap = function() return true end,
+	ContextMenu = function() end,
+	Text = {},
+}
+local ns = {}
 for _, file in ipairs(FILES) do
 	setfenv(assert(loadfile(file)), env)(ADDON, ns)
 end
@@ -984,6 +1132,18 @@ ns.CreateList = function()
 	function list:Message(text, color)
 		self.rows[#self.rows + 1] = { kind = "message", text = text, color = Rgb(color) }
 	end
+	function list:Band(name, from, cap, skill)
+		self.rows[#self.rows + 1] = { kind = "band", name = name, from = from, cap = cap, skill = skill }
+	end
+	function list:Line(entry)
+		self.rows[#self.rows + 1] = {
+			kind = "line",
+			icon = entry.icon,
+			text = entry.text,
+			detail = entry.detail,
+			color = Rgb(entry.color),
+		}
+	end
 	function list:Add(entry)
 		self.rows[#self.rows + 1] = {
 			kind = "row",
@@ -993,6 +1153,10 @@ ns.CreateList = function()
 			color = Rgb(entry.color),
 			detail = entry.detail,
 			detailColor = Rgb(entry.detailColor),
+			bar = entry.bar,
+			barColor = Rgb(entry.barColor),
+			sourceIcon = entry.sourceIcon,
+			current = entry.current,
 		}
 	end
 	function list:Finish() end
@@ -1000,9 +1164,10 @@ ns.CreateList = function()
 	return list
 end
 local first = #created + 1
-if STATE.buyReagents then
-	ns.db.collectModes[ns.CharacterKey()] = "auction"
-end
+-- The scenes choose the collect mode they show: gathering for the plain route and tracker, buying for the
+-- auction house route and the shopping list.
+ns.db.collectModes[ns.CharacterKey()] = STATE.buyReagents and "auction" or "gather"
+ns.Changed("settings")
 ns.AttachRoute()
 assert(not hooks.RefreshRightTabs and not hooks.RightTabSelected, "native profession methods stay untouched")
 local page = created[first]
@@ -1028,12 +1193,16 @@ local route = {
 	portrait = rawget(env.ProfessionsFrame, "portrait"),
 	skill = Widget(page.Skill),
 	target = Widget(page.Target),
+	money = Widget(page.MoneyText),
 	craft = Widget(page.Craft),
+	craftCount = Widget(page.CraftCount),
 	track = Widget(page.Track),
+	trackLabel = Widget(page.TrackLabel),
 	collect = Widget(page.Collect),
 	collectLabel = Widget(page.CollectLabel),
 	vendor = Widget(page.Vendor),
 	shoppingList = Widget(page.ShoppingList),
+	replan = Widget(page.Replan),
 	lists = {},
 }
 for _, list in ipairs(lists) do
@@ -1279,12 +1448,24 @@ for _, profession in ipairs(ns.ShoppingList()) do
 	end
 	shopping[#shopping + 1] = out
 end
+local shoppingNote
+do
+	local names, seen = {}, {}
+	for _, list in ipairs(shopping) do
+		local name = ns.AuctionListName(list.profession)
+		if name and not seen[name] then
+			seen[name] = true
+			names[#names + 1] = name
+		end
+	end
+	shoppingNote = ns.AuctionListNote(names)
+end
 for _, id in ipairs(STATE.learned) do
 	ns.NoteLearnedRecipe(id, true)
 end
 io.write(Json({
 	route = route, tracker = tracker, trainer = trainer, reagent = reagent,
-	gear = gear, buffs = buffs, shopping = shopping,
+	gear = gear, buffs = buffs, shopping = shopping, shoppingNote = shoppingNote,
 }))
 """
 
@@ -1315,13 +1496,14 @@ def requirement_text(req):
 
 
 def addon_atlases(ui):
-    """{name: {width, height}} for every atlas the addon's Lua names, as C_Texture.GetAtlasInfo gives them."""
-    names = set(ui.table("UiTextureAtlasElement", key="Name"))
-    literals = set()
-    for folder in ("Core", "Integrations", "UI"):
-        for path in (REPO / folder).glob("*.lua"):
-            literals.update(re.findall(r'"([A-Za-z][\w-]*)"', path.read_text(encoding="utf-8")))
-    return {name: {"width": ui.atlas(name).width, "height": ui.atlas(name).height} for name in sorted(literals & names)}
+    """{name: {width, height}} for every client atlas, as C_Texture.GetAtlasInfo gives them: Blizzard's templates
+    set atlases the addon never names (MinimalScrollBar's track and thumb)."""
+    sizes = {}
+    for name in ui.table("UiTextureAtlasElement", key="Name"):
+        size = ui.atlas_size(name)
+        if size:
+            sizes[name] = {"width": size[0], "height": size[1]}
+    return sizes
 
 
 COOKING_ICON = 133971
@@ -1346,6 +1528,7 @@ def lua_scene(ui, *, buy_reagents=False, buffs=False):
     ]
     buff_names, buff_descriptions = buff_spell_text(ui) if buffs else ({}, {})
     state = {
+        "metadata": TOC_METADATA,
         "buyReagents": buy_reagents,
         "level": 12 if buffs else LEVEL,
         "money": MONEY,
@@ -1431,17 +1614,21 @@ F_MED2 = Font(FRIZ, 14, WHITE, (1, -1))  # GameFontHighlightMed2
 PROFESSION_RECIPE_COLOR = (226 / 255, 220 / 255, 214 / 255)
 DISABLED_FONT_COLOR = (0.5, 0.5, 0.5)
 
-FRAME_W, FRAME_H = 673, 594  # Camelot ProfessionsFrame
+FRAME_W, FRAME_H = 673, 594  # Camelot ProfessionsFrame (the width its condensed crafting page sits in)
 LIST_X, LIST_Y, LIST_W = 5, 72, 304  # CraftingPage.RecipeList (OverrideArt width)
 LIST_H = FRAME_H - LIST_Y - 5
 # UI/RecipeList.lua: the list's own chrome (its insets, tree padding and the SkillUps button), the gap FitLabel
-# keeps before SkillUp's row text, and the screen margin widening stops at.
+# keeps before SkillUp's row text, and the room the list has beside the client's schematic inside the window.
 LIST_CHROME = 59
 TEXT_GAP = 14
-SCREEN_W, SCREEN_MARGIN = 1920, 32
+TREE_INDENT = 10  # a recipe sits under a category
 ROW_H, ROW_GAP, ROW_PAD = 20, 1, 5  # recipe rows; the tree view's spacing and top padding
 DIVIDER_H = 70  # RecipeList.lua: the "Unlearned" divider after learned recipes
 SCHEMATIC_W, SCHEMATIC_H = 360, 484
+SCHEMATIC_GAP = 2
+WINDOW_RIGHT_INSET = 2
+SCREEN_W, SCREEN_MARGIN = 1920, 32  # UI/RecipeList.lua's cap: the window stays clear of the screen's edges
+LIST_MAX = LIST_W + SCREEN_W - 2 * SCREEN_MARGIN - FRAME_W
 SKILL_UP_ICONS = {
     "orange": "Professions-Icon-Skill-High",
     "yellow": "Professions-Icon-Skill-Medium",
@@ -1607,13 +1794,16 @@ def list_rows(unlearned=None):
 
 
 def craft_list_width(ui, bags=BAGS, unlearned=None, marked=False):
-    """UI/RecipeList.lua: the list as wide as its widest name, count and SkillUp row text, capped to the screen."""
+    """UI/RecipeList.lua: the list as wide as its widest name, count and SkillUp row text, up to the screen
+    cap the one window width stops at."""
     measure = ui.canvas(1, 1)
     widest = LIST_W
     learned_ids, unlearned_ids = sorted_recipes(unlearned)
     for learned, ids in ((True, learned_ids), (False, unlearned_ids)):
         for recipe_id in ids:
             width = measure.text_width(recipe_name(recipe_id), F_ROW) + LIST_CHROME
+            if learned:
+                width += TREE_INDENT
             count = craftable_count(recipe_id, bags) if learned else 0
             if count > 0:
                 width += measure.text_width(f" ({count}) ", F_ROW)
@@ -1621,7 +1811,7 @@ def craft_list_width(ui, bags=BAGS, unlearned=None, marked=False):
             text = unlearned_text(recipe_id) if marked and not learned else format_row(describe(recipe_id))
             width += measure.text_width(text, F_ROW) + TEXT_GAP
             widest = max(widest, width)
-    return max(LIST_W, min(widest, LIST_W + SCREEN_W - 2 * SCREEN_MARGIN - FRAME_W))
+    return max(LIST_W, min(widest, LIST_MAX))
 
 
 def recipe_row(canvas, x, y, w, recipe_id, learned, selected, hovered, bags=BAGS, marked=False):
@@ -1808,7 +1998,7 @@ def profession_tabs(canvas, fx, fy, selected, frame_w=FRAME_W):
     y += side_tab(canvas, x, y, OVERVIEW_TAB_ICON) + 2
     for name, icon, *_ in PROFESSIONS:
         y += side_tab(canvas, x, y, icon, selected=name == selected) + 2
-    side_tab(canvas, x, y, "interface/icons/inv_scroll_03.blp", selected=selected in PAGE_IDS)
+    side_tab(canvas, x, y, IDENTITY_ICON, selected=selected in PAGE_IDS)
     if selected in PAGE_IDS:
         panel_tabs(canvas, fx + 11, fy + FRAME_H - 4, list(PAGE_TABS), selected=PAGE_IDS.index(selected))
 
@@ -1820,14 +2010,14 @@ OVERVIEW_TAB_ICON = 136241
 FRAME_MARGIN = 24  # room for the metal corners and portrait around the frame
 TABS_MARGIN = 60
 
-# UI/FrameArt.lua: where each atlas's native left part ends, the column repeated across the extra width, and
+# The frame art's native split: where each atlas's left part ends, the column repeated across extra width, and
 # how many extra native columns the stock background has beyond its atlas (2 of inset at each side).
 BACKGROUND_ART = (129, 32, 4)
 TEMPLATE_ART = (429, 32, 0)
 
 
 def art_piece(atlas, left, right):
-    """UI/FrameArt.lua's SetTexCoord crop: source columns [left, right) of an atlas, at native scale."""
+    """A SetTexCoord crop: source columns [left, right) of an atlas, at native scale."""
     image = atlas.image
     return image.crop(
         (
@@ -1840,8 +2030,8 @@ def art_piece(atlas, left, right):
 
 
 def extend_art(canvas, atlas_name, x, y, total_w, h, split):
-    """UI/FrameArt.lua's three pieces across `total_w`: the left art native, the column repeated at native
-    scale, and the right edge re-anchored at the right. With no extra width the client's stretched draw stays."""
+    """The three pieces across `total_w`: the left art native, the column repeated at native scale, and the
+    right edge re-anchored at the right. With no extra width the client's stretched draw stays."""
     atlas = canvas.ui.atlas(atlas_name)
     left, column, right_extra = split
     extra = total_w - atlas.width - right_extra
@@ -1858,7 +2048,7 @@ def extend_art(canvas, atlas_name, x, y, total_w, h, split):
 
 
 def frame_art(canvas, fx, fy, frame_w):
-    """The frame's Bg and the crafting page's Template2, extended when the list makes the window wider."""
+    """The frame's Bg and the crafting page's Template2 at the one width the window keeps."""
     extend_art(canvas, "Profession-Background-Overview", fx + 2, fy + 21, frame_w - 4, FRAME_H - 23, BACKGROUND_ART)
     extend_art(canvas, "Profession-Background-Template2", fx + 3, fy + 21, frame_w - 8, 570, TEMPLATE_ART)
 
@@ -1873,7 +2063,7 @@ def professions_frame(ui, bags=BAGS, unlearned=None, marked=False):
     fx, fy = m, m
     frame_art(canvas, fx, fy, frame_w)
     hovered = recipe_list(canvas, fx + LIST_X, fy + LIST_Y, list_w, bags, unlearned, marked)
-    schematic(canvas, fx + LIST_X + list_w + 2, fy + LIST_Y, SELECTED, bags)
+    schematic(canvas, fx + LIST_X + list_w + SCHEMATIC_GAP, fy + LIST_Y, SELECTED, bags)
     create_controls(canvas, fx, fy, craftable_count(SELECTED, bags), frame_w)
     profession_tabs(canvas, fx, fy, "Leatherworking", frame_w=frame_w)
     portrait_frame_art(canvas, fx, fy, frame_w, FRAME_H, 136247, "Leatherworking")
@@ -1902,7 +2092,7 @@ def wide_bags():
 
 
 def window_wide_scene(ui):
-    """A Leatherworking list with a long name and craftable counts, which makes the list and window wider."""
+    """A Leatherworking list with every count craftable: the longest rows, and the window wide enough for them."""
     return window_scene(ui, wide_bags())
 
 
@@ -1959,11 +2149,33 @@ def inset_frame(canvas, x, y, w, h, title=None):
 
 
 LIST_ROW, LIST_HEADING, LIST_ICON, LIST_MESSAGE_MIN, LIST_SCROLLBAR = 46, 26, 37, 20, 18  # List.lua
+LIST_ROW_BAR, LIST_BAND, LIST_LINE, LIST_BAR, LIST_SOURCE, LIST_LINE_ICON = 70, 30, 24, 29, 16, 18  # List.lua
+LIST_BAR_FILL, LIST_BAR_INSET = 15, 6  # List.lua
+
+
+def stat_bar(canvas, x, y, w, h, fraction, color):
+    """List.lua's have/need and band bars: the frame, the fill inside its rim and the frame-sized mask over the
+    fill, as the client's ColoredProgressBarTemplate draws these atlases."""
+    ui = canvas.ui
+    canvas.draw(ui.atlas("common-stat-bar-BG"), x, y, w, h)
+    if fraction <= 0:
+        return
+    layer = ui.canvas(canvas.width, canvas.height)
+    track = w - 2 * LIST_BAR_INSET
+    fill_y = y + (h - LIST_BAR_FILL) / 2
+    fill = ui.atlas("common-stat-bar-white")
+    layer.draw(fill, x + LIST_BAR_INSET, fill_y, track * min(fraction, 1), LIST_BAR_FILL, color=color)
+    # SetAtlas slices the mask by its own margins, as it does the frame, so its ends keep their native size.
+    mask = ui.atlas("common-stat-bar-Mask")
+    width, height = layer.px(x + w) - layer.px(x), layer.px(y + h) - layer.px(y)
+    layer.mask(layer.sliced(mask, width, height) if mask.slice else mask.image, x, y, w, h)
+    canvas.paste(layer, 0, 0)
 
 
 def draw_list(canvas, x, y, w, h, rows):
     """List.lua's CreateList in an inset at (x, y, w, h): a full item icon in its stock border with
-    the name beside it and the facts under it, headings as stock lines and wrapped messages."""
+    the name beside it and the facts under it, a band header with its progress bar, a compact gold
+    line for a train or buy step, headings as stock lines and wrapped messages."""
     ui = canvas.ui
     box_x, box_w = x + 4, w - 4 - LIST_SCROLLBAR
     box_y, box_h = y + 4, h - 8
@@ -1981,13 +2193,85 @@ def draw_list(canvas, x, y, w, h, rows):
                 canvas.text(box_x + 6, top + 4 + index * F_NORMAL.height, line, F_NORMAL, color)
             top += max(LIST_MESSAGE_MIN, len(lines) * F_NORMAL.height + 8)
             continue
+        if kind == "band":
+            name = row["name"]
+            name_w = canvas.text(box_x + 6, top + 4, name, F_HIGHLIGHT, box_height=LIST_BAND)
+            canvas.text(
+                box_x + 6 + name_w + 6,
+                top + 4,
+                f"{row['from']} to {row['cap']}",
+                F_NORMAL_SMALL,
+                DISABLED_FONT_COLOR,
+                box_height=LIST_BAND,
+            )
+            # List.lua uses the approved clean progress atlases at the native 15-unit fill height.
+            bar_w = 170
+            bar_h = 29
+            bar_x, bar_y = box_x + box_w - 6 - bar_w, top + (LIST_BAND - bar_h) / 2
+            span = max(row["cap"] - row["from"], 0)
+            done = max(0, min(row.get("skill", 0), row["cap"]) - row["from"])
+            stat_bar(canvas, bar_x, bar_y, bar_w, bar_h, done / span if span > 0 else 0, (0.25, 0.75, 0.25, 1))
+            canvas.text(
+                bar_x,
+                bar_y - 1,
+                f"{done}/{span}",
+                F_NORMAL_SMALL,
+                box_height=bar_h + 2,
+                justify="CENTER",
+                width=bar_w,
+            )
+            top += LIST_BAND
+            continue
+        if kind == "line":
+            row_h = LIST_LINE
+            icon = row.get("icon")
+            if icon is not None:
+                icon_y = top + (row_h - LIST_LINE_ICON) / 2
+                canvas.draw(icon_texture(ui, icon), box_x + 8, icon_y, LIST_LINE_ICON, LIST_LINE_ICON)
+            text_x = box_x + 8 + LIST_LINE_ICON + 8
+            detail = row.get("detail")
+            detail = expand(ui, detail) if detail else None
+            detail_w = canvas.text_width(detail, F_NORMAL) if detail else 0
+            text_w = box_x + box_w - 8 - text_x - (detail_w + 8 if detail else 0)
+            if detail:
+                canvas.text(
+                    box_x + box_w - 8 - detail_w,
+                    top + 4,
+                    detail,
+                    F_NORMAL,
+                    DISABLED_FONT_COLOR,
+                )
+            canvas.text(
+                text_x,
+                top + 4,
+                fit_text(canvas, expand(ui, row["text"]), F_HIGHLIGHT, text_w),
+                F_HIGHLIGHT,
+                tuple(row["color"]) if row.get("color") else WHITE,
+            )
+            top += row_h
+            continue
+        row_h = LIST_ROW_BAR if row.get("bar") else LIST_ROW
+        if row.get("current"):
+            # List.lua's row.Current: the quest log's highlight bar, gold and translucent, under the row.
+            canvas.draw(
+                ui.texture("interface/questframe/ui-questtitlehighlight.blp"),
+                box_x,
+                top,
+                box_w,
+                row_h,
+                (1, 0.82, 0, 0.55),
+            )
         icon = row.get("icon")
         if icon is not None:
-            icon_y = top + (LIST_ROW - LIST_ICON) / 2
+            icon_y = top if row.get("bar") else top + (row_h - LIST_ICON) / 2
             canvas.draw(icon_texture(ui, icon), box_x + 6, icon_y, LIST_ICON, LIST_ICON)
             canvas.draw(ui.atlas("auctionhouse-itemicon-border-white"), box_x + 6, icon_y, LIST_ICON, LIST_ICON)
+        source = row.get("sourceIcon")
         text_x = box_x + 6 + LIST_ICON + 8
-        text_w = box_x + box_w - 8 - text_x
+        text_right = box_x + box_w - 8 - ((LIST_SOURCE + 12) if source else 0)
+        text_w = text_right - text_x
+        if source:
+            canvas.draw(ui.atlas(source), box_x + box_w - 6 - LIST_SOURCE, top + 2, LIST_SOURCE, LIST_SOURCE)
         canvas.text(
             text_x,
             top + 2,
@@ -1996,7 +2280,31 @@ def draw_list(canvas, x, y, w, h, rows):
             tuple(row["color"]) if row.get("color") else WHITE,
         )
         detail = row.get("detail")
-        if detail:
+        if row.get("bar"):
+            bar_x, bar_y, bar_w, bar_h = text_x, top + 2 + F_HIGHLIGHT.height + 3, box_x + box_w - 8 - text_x, LIST_BAR
+            need = max(row["bar"].get("need", 0), 0)
+            have = min(row["bar"].get("have", 0), need)
+            color = tuple(row["barColor"]) if row.get("barColor") else (0.25, 0.75, 0.25)
+            stat_bar(canvas, bar_x, bar_y, bar_w, bar_h, have / need if need > 0 else 0, color)
+            canvas.text(
+                bar_x,
+                bar_y - 1,
+                f"{have}/{need}",
+                F_NORMAL_SMALL,
+                box_height=bar_h + 2,
+                justify="CENTER",
+                width=bar_w,
+            )
+            if detail:
+                detail_color = tuple(row["detailColor"]) if row.get("detailColor") else DISABLED_FONT_COLOR
+                canvas.text(
+                    text_x,
+                    bar_y + bar_h + 3,
+                    fit_text(canvas, expand(ui, detail), F_NORMAL, text_w),
+                    F_NORMAL,
+                    detail_color,
+                )
+        elif detail:
             detail_color = tuple(row["detailColor"]) if row.get("detailColor") else DISABLED_FONT_COLOR
             canvas.text(
                 text_x,
@@ -2005,7 +2313,7 @@ def draw_list(canvas, x, y, w, h, rows):
                 F_NORMAL,
                 detail_color,
             )
-        top += LIST_ROW
+        top += row_h
     if top - box_y > box_h:
         minimal_scrollbar(canvas, box_x + box_w + 4, box_y, box_h, box_h / (top - box_y))
 
@@ -2026,6 +2334,13 @@ def input_box(canvas, x, y, w, h, text):
     canvas.text(x, y, text, F_CHAT, box_height=h)
 
 
+def spinner_box(canvas, x, y, w, h, text):
+    """NumericInputSpinnerTemplate's count box: the same input border the target box wears, with its number
+    centred. The route hides the template's arrow buttons, so none are drawn."""
+    input_border(canvas, x, y, w, h)
+    canvas.text(x, y, text, F_CHAT, box_height=h, justify="CENTER", width=w)
+
+
 ROUTE_SHARE = 50  # Route.lua
 
 
@@ -2042,6 +2357,9 @@ def route_frame(ui, scene_data):
     skill_x = dx + dw + 16
     skill_w = canvas.text(skill_x, dy, route["skill"]["text"], F_NORMAL, box_height=dh)
     input_box(canvas, skill_x + skill_w + 10, dy + (dh - 20) / 2, 40, 20, route["target"]["text"])
+    # The route's money line sits under the skill and target it starts from.
+    if route["money"].get("text"):
+        canvas.text(skill_x, dy + dh + 2, expand(ui, route["money"]["text"]), F_NORMAL)
     # The switch sits right of the target it changes, in the header row.
     collect = route["collect"]
     minimal_checkbox(
@@ -2061,21 +2379,37 @@ def route_frame(ui, scene_data):
     draw_list(canvas, route_x, top, route_right - route_x, bottom - top, route_list["rows"])
     inset_frame(canvas, reagents_x, top, reagents_right - reagents_x, bottom - top, "Reagents  (have / need)")
     draw_list(canvas, reagents_x, top, reagents_right - reagents_x, bottom - top, reagent_list["rows"])
-    # Shopping list, vendor and craft share the bottom row; Track sits at the reagents' bottom right.
-    craft = route["craft"]
-    craft_w = min(canvas.text_width(craft["text"], F_NORMAL) + 32, 240)
+    # Track reads at the route's bottom left, checkbox then label; the actions end at the reagents' edge.
     track = route["track"]
-    track_x = reagents_right - 130
-    panel_button(canvas, track_x, bottom + 10, 130, 22, track["text"], track.get("enabled", True))
-    craft_x = track_x - 8 - craft_w
+    track_label = route["trackLabel"]["text"]
+    minimal_checkbox(
+        canvas,
+        route_x,
+        bottom + 5,
+        track_label,
+        checked=track.get("checked", False),
+        color=None if track.get("enabled", True) else DISABLED_FONT_COLOR,
+    )
+    craft = route["craft"]
+    craft_w = craft.get("width") or 100
+    craft_x = reagents_right - craft_w
     panel_button(canvas, craft_x, bottom + 10, craft_w, 22, craft["text"], craft["enabled"])
+    count = route["craftCount"]
+    count_w = count.get("width") or 62
+    count_x = craft_x - 4 - count_w
+    spinner_box(canvas, count_x, bottom + 11, count_w, 20, count.get("text") or "")
     vendor = route["vendor"]
     if vendor.get("shown"):
-        panel_button(canvas, craft_x - 8 - 120, bottom + 10, 120, 22, vendor["text"], vendor.get("enabled", True))
+        panel_button(canvas, count_x - 8 - 120, bottom + 10, 120, 22, vendor["text"], vendor.get("enabled", True))
     shopping = route["shoppingList"]
     panel_button(
-        canvas, craft_x - 8 - 120 - 8 - 110, bottom + 10, 110, 22, shopping["text"], shopping.get("enabled", True)
+        canvas, count_x - 8 - 120 - 8 - 110, bottom + 10, 110, 22, shopping["text"], shopping.get("enabled", True)
     )
+    # Replan starts the bottom row's free space after Track: it hangs off the Track label's right edge, as the
+    # label hangs off the 26 px checkbox, its text drawn 3 units right.
+    replan = route["replan"]
+    replan_x = route_x + 26 + 3 + canvas.text_width(track_label, F_NORMAL_SMALL) + 20
+    panel_button(canvas, replan_x, bottom + 10, replan.get("width") or 80, 22, replan["text"], True)
     profession_tabs(canvas, fx, fy, "route")
     portrait_frame_art(canvas, fx, fy, FRAME_W, FRAME_H, route["portrait"], "Leatherworking")
     return canvas
@@ -2086,7 +2420,7 @@ def shopping_list_scene(ui, scene_data):
     w, h, margin = 620, 510, 24
     canvas = ui.canvas(w + margin * 2, h + margin * 2)
     x, y = margin, margin
-    portrait_frame_art(canvas, x, y, w, h, 136247, "Shopping list")
+    portrait_frame_art(canvas, x, y, w, h, IDENTITY_ICON, "Shopping list")
     shopping = scene_data["shopping"]
     # GameFontHighlightSmall under the title, right of the portrait: every plan the window buys for.
     plans = ", ".join(f"{profession['profession']} to {profession['target']}" for profession in shopping)
@@ -2102,6 +2436,11 @@ def shopping_list_scene(ui, scene_data):
             continue
         canvas.text(left + 8, top, title, F_NORMAL, box_height=24)
         top += 27
+        if source == "auction" and scene_data.get("shoppingNote"):
+            for line in wrap_text(canvas, scene_data["shoppingNote"], F_SMALL, w - 60):
+                canvas.text(left + 8, top, line, F_SMALL, box_height=16)
+                top += 14
+            top += 9
         for profession, row in rows[:2]:
             item = ui.item(row["itemID"])
             canvas.draw(ui.texture(item.icon), left + 8, top, 30, 30)
@@ -2340,7 +2679,10 @@ BUFF_LABEL_W = 128
 BUFF_AXIS_X = 18 + BUFF_LABEL_W
 BUFF_VIEW_RIGHT = 26
 BUFF_INSET_TOP = 44
-BUFF_INSET_BOTTOM = 120
+BUFF_INSET_BOTTOM = 146
+BUFF_HSCROLL_BOTTOM = 132
+BUFF_HSCROLL_H = 8
+BUFF_FADE = 18
 BUFF_LEGEND_BOTTOM = 100
 BUFF_DETAIL_BOTTOM = 24
 BUFF_DETAIL_H = 74
@@ -2438,6 +2780,30 @@ def buff_header(canvas, x, y, w, text, action):
     )
 
 
+def minimal_hscrollbar(canvas, x, y, w, visible=1.0, offset=0.0):
+    """The buffs page's horizontal MinimalScrollBar: the minimal track and thumb, without the up/down steppers
+    or the vertical caps, as UI/Buffs.lua builds it."""
+    ui = canvas.ui
+    canvas.draw(ui.atlas("!minimal-scrollbar-track-middle"), x, y, w, BUFF_HSCROLL_H)
+    if visible < 1:
+        extent = max(23, w * visible)
+        thumb_x = x + (w - extent) * offset
+        canvas.draw(ui.atlas("minimal-scrollbar-small-thumb-middle"), thumb_x, y, extent, BUFF_HSCROLL_H)
+
+
+def horizontal_fade(canvas, x, y, w, h, left):
+    """A soft dark edge over the clipped timeline, as UI/Buffs.lua's two fade frames draw it."""
+    fade = Image.new("RGBA", (max(1, round(w)), max(1, round(h))), (0, 0, 0, 0))
+    pixels = fade.load()
+    for px in range(fade.width):
+        alpha = round(178 * (1 - px / max(1, fade.width - 1)))
+        if not left:
+            alpha = round(178 * (px / max(1, fade.width - 1)))
+        for py in range(fade.height):
+            pixels[px, py] = (0, 0, 0, alpha)
+    canvas.image.paste(fade, (round(x), round(y)), fade)
+
+
 def buffs_scene(ui, scene_data):
     """The Professions window on SkillUp's buffs page: the skill timeline and the selected buff's strip."""
     buffs = scene_data["buffs"]
@@ -2452,12 +2818,12 @@ def buffs_scene(ui, scene_data):
     cover = ImageOps.fit(art.image, (round((inset_w - 4) * scale), round((inset_h - 4) * scale)), Image.LANCZOS)
     canvas.draw(cover, inset_x + 2, inset_y + 2, inset_w - 4, inset_h - 4)
     inset_frame(canvas, inset_x, inset_y, inset_w, inset_h, expand(ui, buffs.get("title") or "Buffs"))
-    # The switch above the inset's top-right, its label on the right.
+    # The switch beside the inset's title, its bottom above the inset's top edge so it never meets the axis (#599).
     label = expand(ui, buffs.get("onlyLabel") or "")
     minimal_checkbox(
         canvas,
         inset_x + inset_w - canvas.text_width(label, F_NORMAL_SMALL) - 30 - 3,
-        inset_y - 28,
+        inset_y - 33,
         label,
         checked=buffs.get("only"),
     )
@@ -2512,6 +2878,32 @@ def buffs_scene(ui, scene_data):
             viewport_h,
             visible=BUFF_ROWS / len(buffs["rows"]),
             offset=0,
+        )
+
+    # The sideways MinimalScrollBar under the timeline, and a fade while more lies beyond that edge.
+    content_w = buffs.get("contentWidth") or 0
+    view_w = buffs.get("viewWidth") or aw
+    max_offset = max(content_w - view_w, 0)
+    if max_offset > 0:
+        scroll_offset = buffs.get("scrollOffset") or 0
+        if scroll_offset > 0:
+            horizontal_fade(canvas, ax, inset_y + 2, BUFF_FADE, inset_h - BUFF_INSET_BOTTOM - 2, True)
+        if scroll_offset < max_offset:
+            horizontal_fade(
+                canvas,
+                ax + aw - BUFF_FADE,
+                inset_y + 2,
+                BUFF_FADE,
+                inset_h - BUFF_INSET_BOTTOM - 2,
+                False,
+            )
+        minimal_hscrollbar(
+            canvas,
+            ax,
+            inset_y + inset_h - BUFF_HSCROLL_BOTTOM - BUFF_HSCROLL_H,
+            aw,
+            visible=view_w / content_w if content_w > 0 else 1,
+            offset=scroll_offset / max_offset,
         )
 
     # The axis: one grey number per column over its first slot, and the rank divider, both cut to the
@@ -2770,7 +3162,7 @@ def main():
     data = lua_scene(ui)
     scene(ui, [(route_frame(ui, data), 0, 0)]).save(OUT / "route.png")
     scene(ui, [(route_frame(ui, lua_scene(ui, buy_reagents=True)), 0, 0)]).save(OUT / "route-auctionator.png")
-    scene(ui, [(shopping_list_scene(ui, data), 0, 0)]).save(OUT / "shopping-list.png")
+    scene(ui, [(shopping_list_scene(ui, lua_scene(ui, buy_reagents=True)), 0, 0)]).save(OUT / "shopping-list.png")
     gear_scene(ui, data).save(OUT / "gear.png")
     buffs_scene(ui, lua_scene(ui, buffs=True)).save(OUT / "buffs.png")
     tracker_scene(ui, data).save(OUT / "tracker.png")

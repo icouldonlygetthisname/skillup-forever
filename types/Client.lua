@@ -1,5 +1,14 @@
 ---@meta
 
+-- Core/ForeverRequire.lua, copied byte for byte from ForeverCore, collects pcall's results into one table and reads a
+-- dependency name from it. LuaLS types that table from pcall's first result only, so the shared file needs pcall typed
+-- as one value here. At runtime pcall still returns its truthy status and the call's results; this only widens what
+-- the table constructor sees.
+---@param f function
+---@param ... any
+---@return any
+function pcall(f, ...) end
+
 -- FrameXML surfaces absent from Ketho's pinned Core annotations. Signatures follow
 -- Gethe/wow-ui-source forever @ c6e89983189e4f626f549204a23c2d2bea93080a.
 -- These declarations never load in the client.
@@ -63,10 +72,6 @@ EventUtil = {}
 ---@type EditModeManagerFrame?
 EditModeManagerFrame = nil
 
--- UI/Leaderboards.lua publishes the shared window every Forever addon registers into.
----@type ForeverLeaderboardsAPI?
-ForeverLeaderboards = nil
-
 -- GlobalStrings the client defines from its GlobalStrings DB2 in the player's language
 -- (enUS values from wago.tools, Forever build 1.60.1.70009).
 APPRENTICE = "Apprentice"
@@ -82,28 +87,33 @@ UNIT_SKINNABLE_HERB = "Requires Herbalism"
 UNIT_SKINNABLE_ROCK = "Requires Mining"
 ITEM_MIN_SKILL = "Requires %s (%d)"
 
----@class SkillUpProfessionFrame : Frame
----@field CraftingPage SkillUpCraftingPage
----@field BookPage Frame
----@field Bg Texture
----@field professionInfo? ProfessionInfo
----@field ProfessionsOverviewTab SkillUpSideTab
----@field rightProfessionTabs SkillUpSideTab[]
----@field SetPortraitToAsset fun(self: SkillUpProfessionFrame, asset: fileID|string)
----@field GetPortrait fun(self: SkillUpProfessionFrame): Texture
----@field RightTabSelected fun(self: SkillUpProfessionFrame, tab: SkillUpSideTab)
----@field RefreshRightTabs fun(self: SkillUpProfessionFrame)
----@type SkillUpProfessionFrame
-ProfessionsFrame = nil
-
----@class SkillUpCraftingPage : Frame
+-- The window's crafting page, as SkillUp reads it: its recipe list and the schematic form beside it.
+---@class SkillUpCraftingPage : ForeverProfessionPage
 ---@field RecipeList SkillUpRecipeList
 ---@field SchematicForm SkillUpSchematicForm
 ---@field CreateButton? Button
 ---@field CreateAllButton? Button
 ---@field Init fun(self: SkillUpCraftingPage, info: ProfessionInfo)
 
+-- The client's Professions window is core's ForeverProfessionsWindow type (types/Client.lua there), which core no
+-- longer declares as a global (ForeverCore 1.4.1). SkillUp reads a few more of its native members, so they are added
+-- to the class here. Its CraftingPage is core's ForeverProfessionPage; a file that reads SkillUp's own recipe list
+-- and schematic form casts it to SkillUpCraftingPage where it uses them.
+---@class ForeverProfessionsWindow
+---@field Bg Texture
+---@field professionInfo? ProfessionInfo
+---@field SetPortraitToAsset fun(self: ForeverProfessionsWindow, asset: fileID|string)
+---@field GetPortrait fun(self: ForeverProfessionsWindow): Texture
+---@field RightTabSelected fun(self: ForeverProfessionsWindow, tab: SkillUpSideTab)
+---@field RefreshRightTabs fun(self: ForeverProfessionsWindow)
+---@type ForeverProfessionsWindow
+ProfessionsFrame = nil
+
 ---@class SkillUpSchematicForm : Frame
+---@field Description FontString
+---@field OutputText? FontString
+---@field RequiredTools? FontString
+---@field Reagents? Frame
 ---@field GetRecipeInfo? fun(self: SkillUpSchematicForm): TradeSkillRecipeInfo?
 
 -- Blizzard_AuctionHouseUI's frame; its public SetSearchText fills the search box and queries nothing.
@@ -139,7 +149,11 @@ AuctionHouseFrame = nil
 ---@field IsCollapsed? fun(self: SkillUpTreeNode): boolean
 ---@field SetCollapsed? fun(self: SkillUpTreeNode, collapsed: boolean)
 
----@class SkillUpTreeProvider
+-- The shape the client's tree and list data providers share.
+---@class SkillUpBaseDataProvider
+---@field entries any[]
+
+---@class SkillUpTreeProvider : SkillUpBaseDataProvider
 ---@field GetRootNode fun(self: SkillUpTreeProvider): SkillUpTreeNode
 ---@field Insert fun(self: SkillUpTreeProvider, data: SkillUpRecipeNodeData): SkillUpTreeNode
 
@@ -148,19 +162,40 @@ function CreateTreeDataProvider() end
 
 ---@class SkillUpScrollBox : Frame
 ---@field ScrollToBegin fun(self: SkillUpScrollBox)
----@field SetDataProvider fun(self: SkillUpScrollBox, provider: SkillUpDataProvider, retain?: boolean)
+---@field SetDataProvider fun(self: SkillUpScrollBox, provider: SkillUpBaseDataProvider, retain?: boolean|integer)
 ---@field GetScrollPercentage fun(self: SkillUpScrollBox): number
 ---@field SetScrollPercentage fun(self: SkillUpScrollBox, percentage: number, noInterpolation?: boolean)
 
 ---@class SkillUpRecipeScrollBox : SkillUpScrollBox, CallbackRegistryMixin
 ---@field GetDataProvider fun(self: SkillUpRecipeScrollBox): SkillUpTreeProvider?
----@field SetDataProvider fun(self: SkillUpRecipeScrollBox, provider: SkillUpTreeProvider, retain?: boolean)
+---@field SetDataProvider fun(self: SkillUpRecipeScrollBox, provider: SkillUpBaseDataProvider, retain?: boolean|integer)
 ---@field ForEachFrame fun(self: SkillUpRecipeScrollBox, callback: fun(frame: SkillUpRecipeRow, elementData: SkillUpTreeNode))
 
----@class SkillUpScrollBar : Frame
----@field SetHideIfUnscrollable fun(self: SkillUpScrollBar, hide: boolean)
+---@class SkillUpScrollBarThumb : Button
+---@field Begin Texture
+---@field End Texture
+---@field Middle Texture
+---@field isHorizontal boolean
 
----@class SkillUpDataProvider
+---@class SkillUpScrollBarTrack : Frame
+---@field Begin Texture
+---@field End Texture
+---@field Middle Texture
+---@field Thumb SkillUpScrollBarThumb
+
+---@class SkillUpScrollBar : Frame, CallbackRegistryMixin
+---@field Track SkillUpScrollBarTrack
+---@field Back Frame
+---@field Forward Frame
+---@field isHorizontal boolean
+---@field thumbAnchor string
+---@field SetHideIfUnscrollable fun(self: SkillUpScrollBar, hide: boolean)
+---@field SetVisibleExtentPercentage fun(self: SkillUpScrollBar, percentage: number)
+---@field GetVisibleExtentPercentage fun(self: SkillUpScrollBar): number
+---@field SetScrollPercentage fun(self: SkillUpScrollBar, percentage: number, forceImmediate?: boolean)
+---@field GetScrollPercentage fun(self: SkillUpScrollBar): number
+
+---@class SkillUpDataProvider : SkillUpBaseDataProvider
 ---@field GetSize fun(self: SkillUpDataProvider): integer
 
 ---@param tbl? table
@@ -170,7 +205,18 @@ function CreateDataProvider(tbl) end
 ---@alias SkillUpElementInitializer fun(frame: Frame, elementData: SkillUpListElement)
 ---@alias SkillUpElementFactory fun(factory: fun(template: string, initializer: SkillUpElementInitializer), elementData: SkillUpListElement)
 
----@class SkillUpScrollView
+-- ForeverCore 1.8.0 no longer declares these client scroll types, so SkillUp declares what it uses.
+---@class ForeverScrollBoxView
+---@field SetElementInitializer fun(self: ForeverScrollBoxView, template: string, initializer: fun(button: Button, element: any))
+---@field SetElementExtent fun(self: ForeverScrollBoxView, extent: number)
+---@field SetPadding fun(self: ForeverScrollBoxView, ...: number)
+
+---@class ForeverScrollUtil
+---@field InitScrollBoxListWithScrollBar fun(box: Frame, bar: any, view: ForeverScrollBoxView)
+---@type ForeverScrollUtil
+ScrollUtil = nil
+
+---@class SkillUpScrollView : ForeverScrollBoxView
 ---@field SetElementExtent fun(self: SkillUpScrollView, extent: number)
 ---@field SetElementExtentCalculator fun(self: SkillUpScrollView, calculator: fun(dataIndex: integer, elementData: SkillUpListElement): number)
 ---@field SetElementFactory fun(self: SkillUpScrollView, elementFactory: SkillUpElementFactory)
@@ -186,15 +232,8 @@ RAID_CLASS_COLORS = nil
 
 ---@type {UpdateImmediately: boolean, RetainScrollPosition: boolean, NoScrollInterpolation: boolean}
 ScrollBoxConstants = {}
-ScrollUtil = {}
----@param box Frame
----@param bar any
----@param view SkillUpScrollView
-function ScrollUtil.InitScrollBoxListWithScrollBar(box, bar, view) end
----@param box SkillUpRecipeScrollBox
----@param callback fun(owner: SkillUpNamespace, row: SkillUpRecipeRow, node: SkillUpTreeNode)
----@param owner SkillUpNamespace
-function ScrollUtil.AddInitializedFrameCallback(box, callback, owner) end
+---@class ForeverScrollUtil
+---@field AddInitializedFrameCallback fun(box: SkillUpRecipeScrollBox, callback: fun(owner: SkillUpNamespace, row: SkillUpRecipeRow, node: SkillUpTreeNode), owner: SkillUpNamespace)
 
 Professions = {}
 ---@return SkillUpProfessionInfo?
@@ -354,10 +393,10 @@ C_Trainer = {}
 ---@field steps SkillUpTrackerStep[]
 ---@field vendorMissing {name: string, itemID: integer, vendor: integer}[]
 ---@field SetHeader fun(self: SkillUpTrackerBlock, text: string)
----@field AddObjective fun(self: SkillUpTrackerBlock, id: string|number, text: string, template?: string, useFullHeight?: boolean, dashStyle?: number, colorStyle?: SkillUpObjectiveColor): Frame
+---@field AddObjective fun(self: SkillUpTrackerBlock, id: string|number, text: string, template?: string, useFullHeight?: boolean, dashStyle?: number, colorStyle?: ForeverObjectiveTrackerColor): Frame
 
----@class SkillUpTrackerModule : Frame
----@field uiOrder number
+---@class SkillUpTrackerModule : ForeverTrackerModule
+---@field safeCall? ForeverSafeCall runs the section's header menu entries in SkillUp's journal
 ---@field MarkDirty fun(self: SkillUpTrackerModule)
 ---@field SetHeader fun(self: SkillUpTrackerModule, text: string)
 ---@field GetContextMenuParent fun(self: SkillUpTrackerModule): Frame
@@ -366,7 +405,7 @@ C_Trainer = {}
 ---@type ForeverNativeTrackerFrame
 ObjectiveTrackerFrame = nil
 
----@class SkillUpObjectiveColor : ColorRGBData
+---@class SkillUpObjectiveColor : ForeverObjectiveTrackerColor
 ---@field reverse? SkillUpObjectiveColor
 ---@type {Complete: SkillUpObjectiveColor}
 OBJECTIVE_TRACKER_COLOR = {}

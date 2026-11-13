@@ -60,8 +60,33 @@ local c = Client.load({
 })
 local ns, API = c.ns, c.G.SkillUpForever.API
 equal(API.version, 1, "version 1")
-equal(API.minor, 4, "minor version includes recipe materials helpers")
-equal(#API.Professions(), 0, "nothing before the saved variables load")
+equal(API.minor, 6, "minor 6 adds tracking, the shopping trip, limits, stats and the leaderboard")
+-- Publishing is discovery, not an API change (#594): the suite lists the addon with the API's own version and minor.
+local published
+for _, entry in ipairs(c.G.ForeverCore.APIKit.Addons()) do
+	if entry.name == "SkillUpForever" then
+		published = entry
+	end
+end
+equal(published and published.version, 1, "the suite list carries the API's version")
+equal(published and published.minor, 6, "and its minor")
+equal(published and published.api, API, "and the addon's own API table")
+-- Nothing to answer says why, so a caller can tell "ask again later" from "there is nothing to ask about".
+local beforeLoad, beforeLoadReason = API.Professions()
+equal(beforeLoad, nil, "nothing before the saved variables load")
+equal(beforeLoadReason, "loading", "and the read says to ask again")
+local noMaterials, noMaterialsReason = API.RequiredMaterials(999999)
+equal(noMaterials, nil, "an unknown recipe has no materials")
+equal(noMaterialsReason, "none", "and says there is nothing to answer")
+local noParts, noPartsReason = API.SubComponents(999999)
+equal(noParts, nil, "nor sub-components")
+equal(noPartsReason, "none", "with the same reason")
+local trackedBefore, trackedBeforeReason = API.IsTracked(165)
+equal(trackedBefore, nil, "nothing is tracked before the saved variables load")
+equal(trackedBeforeReason, "loading", "and tracking says to ask again")
+local setBefore, setBeforeReason = API.SetTracked(165, true)
+equal(setBefore, nil, "tracking cannot be set before the saved variables load")
+equal(setBeforeReason, "loading", "with the same reason")
 
 c.spells = {
 	[GLOVES] = "Toughened Leather Gloves",
@@ -88,7 +113,75 @@ c.professions = {
 	{ name = "Alchemy", icon = 136247, rank = 0, max = 0, id = 8171 },
 }
 c.Boot()
+ns.SetCollectMode("gather")
 equal(#c.chat, 0, "the addon starts without a word")
+
+-- Subscribe is ForeverCore's hub (docs/api.md): the frame after a change, once per burst, naming what moved.
+local heard = {}
+local unsubscribe = API.Subscribe(function(changes)
+	heard[#heard + 1] = changes
+end)
+equal(#heard, 0, "subscribing sends nothing by itself")
+c.Advance(0)
+equal(#heard, 0, "nor on the next frame")
+ns.Changed("target")
+equal(#heard, 0, "a change waits for the frame after it")
+c.Advance(0)
+equal(#heard, 1, "then the callback runs")
+equal(heard[1].professions, true, "naming the levelling answers")
+equal(heard[1].shopping, true, "and the shopping list")
+equal(heard[1].stop, nil, "and nothing it does not publish")
+ns.Changed("target")
+ns.Changed("prices")
+ns.Changed("bags")
+equal(#heard, 1, "a burst of changes is still one call")
+c.Advance(0)
+equal(#heard, 2, "sent on the frame after it")
+unsubscribe()
+unsubscribe()
+ns.Changed("target")
+c.Advance(0)
+equal(#heard, 2, "an unsubscribed callback hears nothing, and unsubscribing twice is safe")
+
+-- Tracking reads and sets the same saved choice the route page and tracker use, quietly from the API.
+equal(API.IsTracked(197), true, "the saved tracked profession reads back")
+equal(API.IsTracked(165), false, "and an untracked one is false")
+local sounds = 0
+local PlaySound = c.G.PlaySound
+c.G.PlaySound = function()
+	sounds = sounds + 1
+end
+equal(API.SetTracked(165, true), true, "tracking a learned profession changes the setting")
+equal(API.IsTracked(165), true, "and reads back tracked")
+equal(API.SetTracked(165, true), false, "setting the same value changes nothing")
+equal(API.SetTracked(165, "yes"), false, "a non-boolean choice is refused")
+equal(API.SetTracked(333, true), false, "an unlearned skill line is refused")
+equal(API.SetTracked(999, true), false, "an unknown skill line is refused")
+equal(API.SetTracked(165, false), true, "and it can be stopped again")
+equal(sounds, 0, "no API call plays the checkbox sound")
+ns.SetTrackedByPlayer(165, true)
+equal(sounds, 1, "the player's own click keeps the checkbox sound")
+ns.SetTracked(165, false)
+c.G.PlaySound = PlaySound
+
+-- A tracking change reaches subscribers like any other answer, once, on the next frame.
+local trackingHeard = {}
+local stopTracking = API.Subscribe(function(changes)
+	trackingHeard[#trackingHeard + 1] = changes
+end)
+API.SetTracked(165, true)
+equal(#trackingHeard, 0, "a tracking change waits for the frame after it")
+c.Advance(0)
+equal(#trackingHeard, 1, "then the subscriber hears it once")
+equal(trackingHeard[1].professions, true, "naming the levelling answers")
+equal(trackingHeard[1].shopping, true, "and the shopping list")
+API.SetTracked(165, true)
+c.Advance(0)
+equal(#trackingHeard, 1, "a refused no-change sends nothing")
+API.SetTracked(165, false)
+c.Advance(0)
+equal(#trackingHeard, 2, "stopping it is another single change")
+stopTracking()
 
 local list = API.Professions()
 -- Until the vendors and trainers are read from QuestieDB, a step says what to find and routes nowhere.
@@ -174,6 +267,33 @@ equal(byItem[LEATHER].need, 64, "leather for the whole route")
 equal(byItem[LEATHER].have, 40, "leather in the bags")
 equal(byItem[LEATHER].source, "craft", "a learned recipe makes the leather")
 
+-- Limits trim each call's fresh copy; the cached answer is built at the largest size, so no limit rebuilds it.
+local limited = API.Professions({ steps = 1, recipes = 1 })
+equal(#limited[3].steps, 1, "a step limit trims the route")
+equal(#limited[3].recipes, 1, "a recipe limit trims the crafts")
+local stepsOnly = API.Professions({ steps = 1 })
+equal(#stepsOnly[3].steps, 1, "a step limit alone trims the steps")
+equal(#stepsOnly[3].recipes, 2, "and keeps the default recipe count")
+local recipesOnly = API.Professions({ recipes = 1 })
+equal(#recipesOnly[3].steps, 3, "a recipe limit alone keeps the default steps")
+equal(#recipesOnly[3].recipes, 1, "and trims the recipes")
+local defaults = API.Professions({})
+equal(#defaults[3].steps, 3, "an empty table keeps the step default")
+equal(#defaults[3].recipes, 2, "and the recipe one")
+local full = API.Professions({ steps = 25, recipes = 25 })
+equal(#full[3].steps > #defaults[3].steps, true, "25 is the largest limit allowed, with every step it has")
+for _, bad in ipairs({ 0, 26, 1.5, "3", false }) do
+	local value, reason = API.Professions({ steps = bad })
+	equal(value, nil, "a bad step limit is refused: " .. tostring(bad))
+	equal(reason, "invalid", "with an invalid reason")
+end
+local badRecipes, badRecipesReason = API.Professions({ recipes = 1.5 })
+equal(badRecipes, nil, "a bad recipe limit is refused")
+equal(badRecipesReason, "invalid", "with the same reason")
+local badLimits, badLimitsReason = API.Professions("many")
+equal(badLimits, nil, "a non-table limits argument is refused")
+equal(badLimitsReason, "invalid", "with the same reason")
+
 -- Nil where SkillUp can't tell: no name, no rank title, no price, nothing planned.
 local tailoring = list[1]
 equal(tailoring.steps[1].text, "Craft 10 recipe 3", "an unnamed recipe still reads")
@@ -186,16 +306,19 @@ equal(#alchemy.steps, 0, "no steps")
 equal(#alchemy.recipes, 0, "no recipes")
 equal(#alchemy.reagents, 0, "no reagents")
 
--- Kept until an event says otherwise.
-equal(API.Professions(), list, "a second call is the cache")
+-- Built once and kept until an event says otherwise, but every read is the caller's own table.
+local second = API.Professions()
+equal(second ~= list, true, "a second call is a fresh table")
+equal(second[1].steps[1].text, list[1].steps[1].text, "with the same answers")
+second[1].name, second[1].steps[1].text = "changed by the caller", "changed by the caller"
+equal(API.Professions()[1].name, "Tailoring", "a caller's change never reaches the addon's cache")
+equal(API.Professions()[1].steps[1].text ~= "changed by the caller", true, "nor its steps")
 c.Fire("ITEM_DATA_LOAD_RESULT")
-equal(API.Professions(), list, "item data with no name waiting keeps the cache")
+equal(#API.Professions(), 4, "item data with no name waiting keeps the answers")
 c.Fire("BAG_UPDATE_DELAYED")
-local rebuilt = API.Professions()
-equal(rebuilt ~= list, true, "a bag update rebuilds")
-equal(API.Professions(), rebuilt, "once")
+equal(API.Professions()[1].name, "Tailoring", "a bag update answers the same list")
 ns.Changed("fees")
-equal(API.Professions() ~= rebuilt, true, "dropped plans rebuild it")
+equal(API.Professions()[1].name, "Tailoring", "dropped plans answer again")
 
 -- Steps route by travel time to the NPC they name.
 local estimates, routed = 0, nil
@@ -239,11 +362,37 @@ equal(table.concat(c.opened, " "), "165", "and once when the client reports the 
 c.professions[1].id = 8165
 c.G.C_TradeSkillUI.OpenTradeSkill = OpenTradeSkill
 
+-- The shopping list's trip button, started through its own function.
+local shoppingTrip = ns.ShoppingTrip
+local tripArgument
+ns.ShoppingTrip = function(skillLineID)
+	tripArgument = skillLineID
+	return true
+end
+equal(API.ShoppingTrip(165), true, "the API starts the shopping trip")
+equal(tripArgument, 165, "for the profession it was given")
+ns.ShoppingTrip = shoppingTrip
+
+-- Stats exposes only this character's recipes-observed record.
+local stats = API.Stats()
+local startValue = stats[1].value
+equal(#stats, 1, "one local activity row")
+equal(stats[1].addon, "SkillUpForever", "this addon")
+equal(stats[1].metric, "recipes_observed_learned", "the observed-recipes metric")
+equal(stats[1].subject, "all", "for the whole record")
+if startValue == 0 then
+	equal(stats[1].eventUnix, 0, "no event time before the first observation")
+end
+ns.Stats.Observe(987654)
+local observed = API.Stats()
+equal(observed[1].value, startValue + 1, "a new observation raises this character's total")
+equal(type(observed[1].eventUnix), "number", "with the observation's time")
+observed[1].value = -1
+equal(API.Stats()[1].value, startValue + 1, "a caller's change never reaches the record")
+
 -- Tracking changes the order, so the next call rebuilds.
-local tracked = API.Professions()
 ns.SetTracked(165, true)
-equal(API.Professions() ~= tracked, true, "tracking a profession rebuilds the list")
-equal(API.Professions()[2].name, "Leatherworking", "and it moves ahead of the untracked ones")
+equal(API.Professions()[2].name, "Leatherworking", "tracking a profession rebuilds the list and moves it ahead")
 
 -- What the client reports reaches the list through every file between: a merchant seen to sell thread for
 -- less re-prices the purchase.
@@ -438,5 +587,18 @@ scrollClient.G.ShortestPathForever = {
 equal(scrollAPI.Navigate(COOKING, 1), true, "the scroll step routes")
 equal(scrollClient.routed, "Fish Vendor", "to its vendor, not a trainer")
 equal(trainerAsked, false, "even when it routes")
+
+-- A core older than the kit's Publish still loads the addon: with the kit at minor 1 the guard hands it nothing.
+local kit = c.G.ForeverCore.APIKit
+local kitMinor, publishCalls = kit.minor, 0
+kit.minor = 1
+kit.Publish = function()
+	publishCalls = publishCalls + 1
+end
+local chunk = assert(loadfile("Core/API.lua"))
+setfenv(chunk, c.G)
+equal(pcall(chunk, "SkillUpForever", c.ns), true, "the addon loads on a kit from before Publish")
+equal(publishCalls, 0, "and a minor 1 kit is handed nothing")
+kit.minor = kitMinor
 
 Client.report("api_spec")

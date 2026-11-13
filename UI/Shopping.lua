@@ -1,5 +1,9 @@
 ---@type string, SkillUpNamespace
 local _, ns = ...
+
+if ns.broken then
+	return
+end
 local L = ns.L
 
 local CALLER = "SkillUp Forever"
@@ -10,8 +14,6 @@ local MENU_EXTENT = 20 * 20
 
 ---@type SkillUpTrackerModule?
 local module
--- Set when the anchor cannot be read: the section then stays out of the tracker instead of raising.
-local detached = false
 
 ---@return boolean
 function ns.HasAuctionator()
@@ -77,6 +79,24 @@ ns.WithItemNames = WithNames
 function ns.AuctionListName(profession)
 	local character = ns.CharacterKey()
 	return character and ("SkillUp: " .. character .. ": " .. profession) or nil
+end
+
+-- What the Shopping list says under Auction house, and the auction bar's Search tooltip says in one line (#554).
+-- `names` are the Auctionator lists this character's tracked routes write, in the window's order.
+---@param names string[]?
+---@return string
+function ns.AuctionListNote(names)
+	if not ns.HasAuctionator() then
+		return L["Without Auctionator, a recipe's Search button fills the game's own auction box one reagent at a time."]
+	end
+	if ns.CollectMode() ~= "auction" then
+		return L["Turning Buy reagents on writes an Auctionator list with every auction reagent still missing."]
+	end
+	local listed = names and #names > 0 and table.concat(names, ", ") or L["SkillUp's list"]
+	return string.format(
+		L["Auctionator list: %s. Open the auction house, Shopping tab, pick it and Search; buy each row with a click."],
+		listed
+	)
 end
 
 -- Auctionator's own "scan when the auction house opens" option, read through its config table. nil
@@ -149,7 +169,7 @@ end
 -- Keep every tracked route's Auctionator list up to date with what it still buys, empties one it no
 -- longer needs, and leaves an unchanged list alone. Gather mode buys nothing, so it is left as it is.
 local function SyncAuctionator()
-	if not ns.HasAuctionator() or ns.CollectMode() ~= "auction" then
+	if not ns.HasAuctionator() or ns.CollectMode() ~= "auction" or ns.db.auctionSearch == false then
 		return
 	end
 	for _, entry in ipairs(ns.TrackedNeeds()) do
@@ -678,7 +698,7 @@ end
 
 ---@return boolean
 function ns.TrackerAttached()
-	return module ~= nil and not detached and ForeverTrackerHost ~= nil and ForeverTrackerHost.IsAttached(module)
+	return module ~= nil and ForeverCore.TrackerHost.IsAttached(module)
 end
 
 -- A burst of bag, skill or recipe events marks the tracker dirty many times in one frame; the host already
@@ -687,7 +707,7 @@ end
 local merchantPending = false
 local function RefreshTracker()
 	SyncAuctionator()
-	if module and ns.db.showTracker and not detached then
+	if module and ns.db.showTracker then
 		module:MarkDirty()
 	end
 	if not (ns.db.merchantButton and MerchantFrame ~= nil and MerchantFrame:IsShown()) then
@@ -704,84 +724,21 @@ local function RefreshTracker()
 	end)
 end
 
+-- The saved choice itself, without the client's click sound: the public API sets it quietly.
 ---@param skillLine integer
 ---@param tracked boolean
 function ns.SetTracked(skillLine, tracked)
 	-- false is kept, not dropped: it is the player saying stop, which AutoTrack honours.
 	ns.db.trackedProfessions[skillLine] = tracked
-	PlaySound(tracked and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
 	ns.Changed("tracking")
 end
 
----@type fun()
-local Attach
-
----@param target SkillUpTrackerModule
----@param container Frame
-local function SetContainer(target, container)
-	---@diagnostic disable-next-line: undefined-field
-	target:SetContainer(container)
-end
-
--- Where the section hangs right now. The shared host and Blizzard's tracker
--- both replace frames during a layout, so this is read on every use, never cached.
----@return Frame?
-local function Anchor()
-	if not module then
-		return nil
-	end
-	local parent = module:GetParent()
-	local host = ForeverTrackerHost
-	if host and host.Attach then
-		if not parent or (host.IsAttached and not host.IsAttached(module)) then
-			host.Attach(module)
-			parent = module:GetParent()
-		end
-	elseif not parent then
-		Attach()
-		parent = module and module:GetParent()
-	end
-	local native = ObjectiveTrackerFrame
-	if native and parent == native.Header then
-		-- Blizzard recreates the heading frame as it lays out All Objectives, so a
-		-- point on that copy is a dead point. Fall back to the host or the tracker.
-		if host and host.Attach then
-			host.Attach(module)
-		elseif module then
-			SetContainer(module, native)
-		end
-		parent = module and module:GetParent()
-	end
-	return parent
-end
-
----@return boolean
-local function AnchorAvailable()
-	local parent = Anchor()
-	return parent ~= nil and not (parent.GetPoint and not parent:GetPoint())
-end
-
-local function Detach()
-	detached = true
-	if module then
-		module:Hide()
-	end
-end
-
-Attach = function()
-	if not module or detached then
-		return
-	end
-	local host = ForeverTrackerHost
-	if host and host.Attach then
-		host.Attach(module)
-		return
-	end
-	-- No shared host yet: the template's own container layout places the section,
-	-- rather than reserving a uiOrder above Blizzard's sections.
-	if ObjectiveTrackerFrame then
-		SetContainer(module, ObjectiveTrackerFrame)
-	end
+-- The player's own click on a Track button: the same choice, with the checkbox sound.
+---@param skillLine integer
+---@param tracked boolean
+function ns.SetTrackedByPlayer(skillLine, tracked)
+	ns.SetTracked(skillLine, tracked)
+	PlaySound(tracked and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
 end
 
 ---@class SkillUpModuleMixin : SkillUpTrackerModule
@@ -789,7 +746,7 @@ local ModuleMixin = { headerText = L["Profession reagents"] }
 
 ---@param block SkillUpTrackerBlock
 function ModuleMixin:OnBlockHeaderClick(block)
-	ns.ContextMenu(self:GetContextMenuParent(), function(_, root)
+	ForeverCore.ContextMenu(self:GetContextMenuParent(), function(_, root)
 		root:SetScrollMode(MENU_EXTENT)
 		root:CreateTitle(block.profession)
 		-- Only while this profession is open: the client crafts from the open one.
@@ -829,38 +786,49 @@ function ModuleMixin:OnBlockHeaderClick(block)
 			ns.AddSkippedMenu(root:CreateButton(string.format(L["Skipped (%d)"], skipped)), block.id)
 		end
 		root:CreateButton(L["Stop tracking"], function()
-			ns.SetTracked(block.id, false)
+			ns.SetTrackedByPlayer(block.id, false)
 		end)
 	end)
 end
 
--- The template from Shopping.xml: a line that takes the mouse.
-local LINE_TEMPLATE = "SkillUpForeverTrackerLineTemplate"
+-- ForeverCore's shared line template: an objective line that takes the mouse, in a template of its own so the
+-- tracker's pooling never mixes these lines with Blizzard's or another section's.
+local LINE_TEMPLATE = "ForeverTrackerInteractiveLineTemplate"
 
 -- A left click on the line sets a waypoint to the NPC `nearest` picks, by travel
--- time, and hovering names it. Picked when used, never while the tracker redraws.
+-- time, and hovering names it. `steps` lists the training steps, so the tooltip can name the rest under
+-- *Also train* (#557). Picked when used, never while the tracker redraws.
 ---@param line Frame
 ---@param title string
 ---@param label string
 ---@param nearest fun(): integer?
 ---@param quest? boolean an Artisan quest step
-local function Waypointed(line, title, label, nearest, quest)
-	line:SetScript("OnMouseUp", function(_, button)
-		local npcID = button == "LeftButton" and nearest()
-		if npcID then
-			ns.SetWaypoint(npcID)
-		end
-	end)
-	line:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-		GameTooltip_SetTitle(GameTooltip, title)
-		ns.AddNearest(GameTooltip, label, nearest())
-		if quest then
-			ns.AddQuestChainHint(GameTooltip)
-		end
-		GameTooltip:Show()
-	end)
-	line:SetScript("OnLeave", GameTooltip_Hide)
+---@param steps? SkillUpTrackerStep[] the training steps, the rest listed on the tooltip
+local function Waypointed(line, title, label, nearest, quest, steps)
+	ForeverCore.TrackerLine.SetInteractive(line, {
+		onClick = function()
+			local npcID = nearest()
+			if npcID then
+				ns.SetWaypoint(npcID)
+			end
+		end,
+		tooltip = function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+			GameTooltip_SetTitle(GameTooltip, title)
+			ns.AddNearest(GameTooltip, label, nearest())
+			if quest then
+				ns.AddQuestChainHint(GameTooltip)
+			end
+			if steps and #steps > 1 then
+				GameTooltip_AddBlankLineToTooltip(GameTooltip)
+				GameTooltip_AddNormalLine(GameTooltip, L["Also train"])
+				for index = 2, #steps do
+					GameTooltip_AddNormalLine(GameTooltip, steps[index].text)
+				end
+			end
+			GameTooltip:Show()
+		end,
+	})
 end
 
 -- The item names the tracker draws. One that has not loaded is asked for and remembered, so item data that names
@@ -955,14 +923,16 @@ local function LayoutEntry(self, entry)
 	local steps = TrainingSteps(plan)
 	block.steps = steps
 	if #steps > 0 then
-		local more = #steps > 1 and string.format(" |cff808080(%s)|r", string.format(L["+%d more"], #steps - 1)) or ""
+		local more = #steps > 1
+				and string.format(" |cff808080(%s)|r", string.format(L["+%d more to train"], #steps - 1))
+			or ""
 		local first = steps[1]
 		local npc, label = first.nearest()
 		local line = block:AddObjective("Train", first.text .. more, npc and LINE_TEMPLATE or nil)
 		if npc then
 			Waypointed(line, first.text, label, function()
 				return (first.nearest(true))
-			end, first.quest and true)
+			end, first.quest and true, steps)
 		end
 	end
 	local shown = 0
@@ -1005,54 +975,43 @@ function ModuleMixin:LayoutContents()
 	for itemID in pairs(waitingNames) do
 		waitingNames[itemID] = nil
 	end
-	if not ns.db.showTracker or detached then
+	if not ns.db.showTracker then
 		return
 	end
+	-- A route that cannot be drawn raises through the shared host, which records the failure in SkillUp's journal
+	-- and still lays out the sections below this one.
 	for _, entry in ipairs(ns.TrackedNeeds()) do
-		if not AnchorAvailable() then
-			ns.Print(L["couldn't add tracked reagents to the objective tracker; please report it."])
-			Detach()
-			return
-		end
-		local ok, keep = pcall(LayoutEntry, self, entry)
-		if not ok then
-			ns.Print(L["couldn't add tracked reagents to the objective tracker; please report it."])
-			Detach()
-			return
-		end
-		if not keep then
+		if not LayoutEntry(self, entry) then
 			return
 		end
 	end
 end
 
 local function CreateModule()
-	if not ObjectiveTrackerFrame then
-		ns.Print(L["the objective tracker isn't available, so tracked reagents can't be shown."])
+	-- ForeverCore builds and attaches the section after saved variables load, so no tracker frame, no shared host
+	-- and no old table is this file's problem: core records the first two and offers the third once. The column's
+	-- scale, Lock and position were SkillUp's before Forever Core kept them, so the player keeps the layout they
+	-- chose.
+	local created = ForeverCore.TrackerSection.Create("SkillUpForeverObjectiveTracker", ModuleMixin, {
+		header = ModuleMixin.headerText,
+		legacy = function()
+			return ns.db
+		end,
+		legacyKey = "trackerHost",
+		safeCall = ns.core.SafeCall,
+		onUnattached = function()
+			ns.Print(L["couldn't add tracked reagents to the objective tracker; please report it."])
+		end,
+	})
+	if not created then
 		return
 	end
-	local hostFrame = ForeverTrackerHost --[[@as Frame?]]
-	local parent = hostFrame and type(hostFrame.GetParent) == "function" and hostFrame or UIParent
-	local created = CreateFrame("Frame", "SkillUpForeverObjectiveTracker", parent, "ObjectiveTrackerModuleTemplate")
 	---@cast created SkillUpTrackerModule
 	module = created
-	Mixin(module, ModuleMixin)
-	module:SetHeader(ModuleMixin.headerText)
-	-- No uiOrder: the shared host owns the section's place and the template lays
-	-- it out when the host is missing.
+	-- A fresh session writes each tracked route's Auctionator list once.
 	EventUtil.ContinueAfterAllEvents(function()
-		C_Timer.After(0, function()
-			Attach()
-			-- A fresh session writes each tracked route's Auctionator list once.
-			SyncAuctionator()
-		end)
+		C_Timer.After(0, SyncAuctionator)
 	end, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")
-	Attach()
-	C_Timer.After(5, function()
-		if not ns.TrackerAttached() then
-			ns.Print(L["couldn't add tracked reagents to the objective tracker; please report it."])
-		end
-	end)
 end
 
 function ns.InitShopping()

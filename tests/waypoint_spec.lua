@@ -1,5 +1,6 @@
 -- Run from the repository root: luajit tests/waypoint_spec.lua
 local Client = dofile("tests/client.lua")
+local ForeverCore = dofile("tests/forever_core.lua")
 local equal = Client.equal
 
 -- One vendor in Elwynn Forest (uiMapID 1429) at 42.1, 65.9, as the catalogue reads it from QuestieDB.
@@ -61,14 +62,14 @@ assert(loadfile("Locales/enUS.lua"))("SkillUpForever", ns)
 setfenv(assert(loadfile("Integrations/Sources.lua")), env)("SkillUpForever", ns)
 
 ---@param accepts boolean?
-local function Run(accepts)
+local function Run(accepts, version)
 	calls = {}
 	if accepts == nil then
 		env.ShortestPathForever = nil
 	else
 		env.ShortestPathForever = {
 			API = {
-				version = 1,
+				version = version or 1,
 				Navigate = function(owner, map, x, y, title)
 					calls.navigate = { owner = owner, map = map, x = x, y = y, title = title }
 					return accepts
@@ -89,6 +90,10 @@ equal(calls.navigate.title, "Drake Lindgren", "Shortest Path Forever names the s
 equal(calls.native, nil, "an accepted route sets no map waypoint")
 equal(calls.printed, "route set to Drake Lindgren, Elwynn Forest  42, 66.", "an accepted route says where")
 
+Run(true, 2)
+equal(calls.navigate and calls.navigate.owner, "SkillUpForever", "API v2 keeps the navigation contract")
+equal(calls.native, nil, "API v2 navigation needs no native fallback")
+
 Run(false)
 equal(calls.navigate ~= nil, true, "Shortest Path Forever is asked first")
 equal(calls.native and calls.native.map, 1429, "a declined route falls back to the map waypoint")
@@ -104,7 +109,7 @@ equal(calls.superTracked, true, "without Shortest Path Forever the waypoint is s
 calls = {}
 env.ShortestPathForever = {
 	API = {
-		version = 2,
+		version = 3,
 		Navigate = function()
 			calls.navigate = true
 			return true
@@ -119,7 +124,7 @@ env.ShortestPathForever = { API = { version = 1 } }
 ns.SetWaypoint(1250)
 equal(calls.native and calls.native.map, 1429, "an API without Navigate falls back to the map waypoint")
 
--- The family hints (UI/ForeverFamily.lua decides when one may show): under a waypoint click to the nearest NPC,
+-- The family hints (ForeverCore.Family decides when one may show): under a waypoint click to the nearest NPC,
 -- what Shortest Path Forever adds; under an Artisan quest step, what Adventure Guide Forever adds.
 local addons, hints = {}, {}
 env.C_AddOns = {
@@ -136,8 +141,12 @@ env.C_AddOns = {
 env.GameTooltip_AddDisabledLine = function(_, text)
 	hints[#hints + 1] = text
 end
-setfenv(assert(loadfile("UI/ForeverFamily.lua")), env)("SkillUpForever", ns)
-equal(ns.Family == env.ForeverFamily.For(ns.L), true, "SkillUp's Family is the view bound to its own L")
+-- ForeverCore's own Family module, as core loads it: one copy, reading its L.
+local core = {}
+setfenv(assert(loadfile(ForeverCore.directory() .. "/UI/ForeverFamily.lua")), env)("ForeverCore", core)
+core.L = ns.L
+env.ForeverCore = { API = 1, Family = core.Family }
+equal(type(env.ForeverCore.Family.Hint) == "function", true, "ForeverCore.Family is the shared hints")
 ns.db = { suggestFamily = true, familyDismissed = {} }
 local TRAVEL = "With Shortest Path Forever, this picks the nearest by travel time and leads you there."
 local ENABLE = "Enable Shortest Path Forever for walked routes and boat times."

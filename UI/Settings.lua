@@ -1,5 +1,9 @@
 ---@type string, SkillUpNamespace
 local addonName, ns = ...
+
+if ns.broken then
+	return
+end
 local L = ns.L
 
 -- Options > AddOns > SkillUp Forever: a short index page, then a stock subpage per group so no page grows
@@ -14,9 +18,6 @@ local function Register(target, key, varType, name)
 	local setting =
 		Settings.RegisterAddOnSetting(target, "SkillUpForever_" .. key, key, ns.db, varType, name, ns.DEFAULTS[key])
 	setting:SetValueChangedCallback(function()
-		if key == "statsShare" then
-			ns.Stats.SetEnabled(ns.db.statsShare)
-		end
 		ns.Changed("settings")
 	end)
 	return setting
@@ -60,6 +61,7 @@ local function Choice(target, key, name, options, tooltip)
 			end
 		end
 	)
+	---@cast proxy SkillUpSetting
 	setting:SetValueChangedCallback(function()
 		Settings.NotifyUpdate(variable)
 		ns.Changed("settings")
@@ -75,13 +77,6 @@ end
 -- luacheck: push no max line length
 function ns.RegisterSettings()
 	category = Settings.RegisterVerticalLayoutCategory(ns.TITLE)
-	Checkbox(
-		category,
-		"statsShare",
-		L["Share observed recipe totals with guild and group"],
-		L["On by default. Turn off to stop sending and receiving totals and hide other players. Local observations stay."]
-	)
-
 	-- Rows are grouped onto a stock subpage each; the category itself is the index, one button per group. A
 	-- button goes in through Settings.RegisterInitializer too, and stays out of search (addSearchTags false),
 	-- which finds the settings themselves. The page opens through the shared secure opener: Settings.OpenToCategory
@@ -89,23 +84,17 @@ function ns.RegisterSettings()
 	-- (cjber/forever-core#333).
 	local function Section(name, rows)
 		local subcategory = Settings.RegisterVerticalLayoutSubcategory(category, name)
+		---@cast subcategory SkillUpCategory
 		rows(subcategory)
 		Settings.RegisterInitializer(
 			category,
 			CreateSettingsButtonInitializer(name, L["Open"], function()
-				ns.OpenSettingsPanel(subcategory:GetID())
+				ForeverCore.OpenSettingsPanel(subcategory:GetID())
 			end, nil, false)
 		)
 	end
 
 	Section(L["Recipe rows"], function(rows)
-		Checkbox(
-			rows,
-			"wideRecipeList",
-			L["Widen the recipe list to fit recipe names"],
-			L["The recipe list grows to the longest recipe name in the open profession, and the window with it, up to the room your screen has. Turn it off to keep the window's own width."]
-		)
-
 		Checkbox(
 			rows,
 			"showUnlearned",
@@ -203,7 +192,7 @@ function ns.RegisterSettings()
 			L["Show tracked professions"],
 			L["Show profession routes in the objective tracker. Hiding them keeps your tracked professions and targets."]
 		)
-		local host = ns.TrackerHost
+		local host = ForeverCore.TrackerHost
 		if host and host.GetSettings and host.SetAttached and host.OnAttachmentChanged then
 			local variable = "SkillUpForever_trackerAttached"
 			local setting = Settings.RegisterProxySetting(
@@ -219,6 +208,7 @@ function ns.RegisterSettings()
 					host.SetAttached(value == true)
 				end
 			)
+			---@cast setting SkillUpSetting
 			Settings.RegisterInitializer(
 				rows,
 				Settings.CreateCheckboxInitializer(
@@ -230,6 +220,35 @@ function ns.RegisterSettings()
 			host.OnAttachmentChanged(function()
 				Settings.NotifyUpdate(variable)
 			end)
+		end
+		-- The shared host owns the scale, so the slider only mirrors it and writes back a percentage of it.
+		if host and host.GetScale and host.SetScale then
+			local scale = Settings.RegisterProxySetting(
+				rows,
+				"SkillUpForever_trackerScale",
+				Settings.VarType.Number,
+				L["Tracker scale"],
+				100,
+				function()
+					return math.floor(host.GetScale() * 100 + 0.5)
+				end,
+				function(value)
+					host.SetScale(value / 100)
+				end
+			)
+			---@cast scale SkillUpSetting
+			local scaleOptions = Settings.CreateSliderOptions(50, 200, 10)
+			scaleOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
+				return value .. "%"
+			end)
+			Settings.RegisterInitializer(
+				rows,
+				Settings.CreateSliderInitializer(
+					scale,
+					scaleOptions,
+					L["Scales the shared Forever tracker. 100% matches the game's own tracker."]
+				)
+			)
 		end
 		-- Lock keeps the detached column where it is: the grip ignores drag while it is on. It only writes the saved
 		-- switch, so it is safe to toggle in combat.
@@ -247,6 +266,7 @@ function ns.RegisterSettings()
 					host.SetLocked(value == true)
 				end
 			)
+			---@cast lock SkillUpSetting
 			Settings.RegisterInitializer(
 				rows,
 				Settings.CreateCheckboxInitializer(
@@ -334,17 +354,18 @@ function ns.RegisterSettings()
 		)
 	end)
 
-	-- The Forever addons page is the same in all five addons (UI/ForeverFamily.lua), with the hint setting on it.
+	-- The Forever addons page is core's (ForeverCore.Family), with the hint setting on it.
 	-- Its rows are plain frames on our own canvas, so nothing of ours goes into Blizzard's layouts or search.
 	-- With the gamepad interface on the page is the client's own rows so the Options navigation can enter it
 	-- (cjber/tweaks-forever#382).
-	local family = ns.Family.Register(category, function()
+	local Family = ForeverCore.Family --[[@as ForeverFamilyAPI]]
+	local family = Family.Register(category, function()
 		return ns.db
-	end, addonName)
+	end, addonName, ns.core.SafeCall)
 	Settings.RegisterInitializer(
 		category,
 		CreateSettingsButtonInitializer(L["Forever addons"], L["Open"], function()
-			ns.OpenSettingsPanel(family:GetID())
+			ForeverCore.OpenSettingsPanel(family:GetID())
 		end, nil, false)
 	)
 
@@ -370,7 +391,7 @@ function ns.OpenSettings()
 		return
 	end
 	local function Open()
-		ns.OpenSettingsPanel(category:GetID())
+		ForeverCore.OpenSettingsPanel(category:GetID())
 	end
 	-- Opening the panel reaches a protected call, so it waits for combat to end like the pages do (#489).
 	if not ns.Pages.Unlocked(Open) then

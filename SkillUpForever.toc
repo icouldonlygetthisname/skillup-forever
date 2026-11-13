@@ -1,4 +1,6 @@
 ## Interface: 16001
+## Dependencies: ForeverCore
+## X-Forever-Core: v1.9.0
 ## Title: SkillUp Forever
 ## Notes: Required skill, colour thresholds and skill-up chance for every recipe in the Professions window.
 ## Notes-deDE: Benötigte Fertigkeit, Farbschwellen und Chance auf Fertigkeitspunkt für jedes Rezept im Berufsfenster.
@@ -21,8 +23,11 @@
 ## SavedVariables: SkillUpForeverDB
 ## OptionalDeps: Auctionator, TradeSkillMaster, TomTom, Syndicator, ShortestPathForever, QuestieDB, Questie, AtlasLootClassic
 ## IconTexture: Interface\AddOns\SkillUpForever\media\Icon
+## X-Forever-Icon: Interface\Icons\INV_Scroll_03
 ## AddonCompartmentFunc: SkillUpForever_OnAddonCompartmentClick
 
+Core\ForeverRequire.lua
+Core\Require.lua
 Locales\enUS.lua
 Locales\deDE.lua
 Locales\esES.lua
@@ -38,10 +43,7 @@ Data\Vendor.lua
 Data\Recipes.lua
 Data\Trainer.lua
 Data\Sources.lua
-UI\ForeverFamily.lua
-Core\SafeCall.lua
-Core\OpenSettings.lua
-Core\Log.lua
+Data\Credits.lua
 Core\Model.lua
 Core\Changes.lua
 Core\Live.lua
@@ -49,19 +51,13 @@ Core\Plan.lua
 Core\Gear.lua
 Core\Buffs.lua
 Core\Core.lua
-Core\PeerStats.lua
-Core\LeaderboardsData.lua
-UI\Leaderboards.lua
 Core\Stats.lua
 Integrations\Questie.lua
 Integrations\AtlasLoot.lua
 Integrations\Catalogue.lua
 Integrations\Prices.lua
 UI\Art.lua
-UI\FrameArt.lua
-UI\Report.lua
 UI\Settings.lua
-UI\SettingsPage.lua
 UI\Tooltip.lua
 UI\DetailsBar.lua
 UI\RecipeList.lua
@@ -73,11 +69,6 @@ UI\Route.lua
 UI\Gear.lua
 UI\Buffs.lua
 UI\Shopping.xml
-UI\TrackerQuestie.lua
-UI\TrackerEqot.lua
-UI\TrackerLock.lua
-UI\TrackerOrder.lua
-UI\TrackerHost.lua
 UI\Shopping.lua
 UI\ShoppingList.lua
 UI\AuctionSearch.lua

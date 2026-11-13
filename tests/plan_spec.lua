@@ -168,6 +168,12 @@ equal(ranked.steps[3].craft.from, 50, "then crafts on past the cap")
 equal(ranked.steps[3].craft.to, 90, "to the target")
 equal(ranked.reached, 90, "which it reaches")
 equal(ranked.cost, 500 + 102, "the rank's fee and every craft's net sale are in the cost")
+equal(#ranked.bands, 2, "the route spans Apprentice and Journeyman")
+equal(ranked.steps[1].band.name, "Apprentice", "the first crafts are in Apprentice")
+equal(ranked.steps[1].band.cap, 75, "which ends at 75")
+equal(ranked.steps[2].band.name, "Journeyman", "the rank step opens Journeyman")
+equal(ranked.steps[3].band.name, "Journeyman", "and the crafts after it stay there")
+equal(ranked.bands[2].from, 75, "which starts at the Apprentice cap")
 equal(ns.RankText(ranked.ranks[1]), "Train Journeyman at 50", "the rank as a line")
 -- What a trainer was seen to charge for the rank replaces the bundled fee, in the step and the total.
 ns.db.trainerRanks[129] = { [150] = 450 }
@@ -216,13 +222,37 @@ equal(
 	"Read Expert First Aid - Under Wraps first: you're at your cap.",
 	"and is read before crafting"
 )
-equal(ns.PlanCost(capped), capped.cost, "the route pays for a book it still has to buy")
-equal(capped.cost >= 10000, true, "which the plan counts")
+equal(capped.cost >= 10000, true, "the route pays for a book it still has to buy")
 c.bags[UNDER_WRAPS] = 1
 equal(ns.RankText(book), "Read Expert First Aid - Under Wraps at 125", "a book in the bags only needs reading")
 equal(ns.RankHeld(book), true, "and is held")
-equal(ns.PlanCost(capped), capped.cost - 10000, "so the route no longer pays for it")
 c.bags[UNDER_WRAPS] = nil
+-- #567: the route's money split: the reagents still to buy after the bags, the fees still to pay, what the
+-- crafts sell for, and whether a needed reagent has no price at all.
+Know(LINEN, true)
+ClothPrice(CLOTH, 2)
+c.items[1251].sell = 1
+c.bags[CLOTH] = 1
+local moneyRank = { name = "Journeyman", cap = 150, fee = 500, reqSkill = 50, level = 0 }
+local moneyPlan = {
+	crafts = { { recipeID = LINEN, crafts = 5 } },
+	training = { { fee = 100 } },
+	ranks = { moneyRank },
+}
+local money = ns.PlanMoney(moneyPlan)
+equal(money.buy, 8, "the reagents still to buy, less the one in the bags")
+equal(money.fees, 600, "the training and rank fees")
+equal(money.sells, 5, "what the five crafts sell for")
+equal(money.unknown, 0, "every reagent has a price")
+c.bags[UNDER_WRAPS], moneyRank.book, moneyRank.fee = 1, UNDER_WRAPS, 10000
+money = ns.PlanMoney(moneyPlan)
+equal(money.fees, 100, "a book already in the bags is not bought again")
+c.bags[UNDER_WRAPS], moneyRank.book, moneyRank.fee = nil, nil, 500
+ClothPrice(CLOTH, nil)
+c.bags[CLOTH] = nil
+money = ns.PlanMoney(moneyPlan)
+equal(money.unknown, 1, "an unpriced reagent is counted, not dropped from a lower total")
+equal(money.buy, 0, "so the buy side says nothing it cannot price")
 -- Artisan First Aid comes from Triage, one quest a side (classic-db quest_template, #121).
 Know(MAGEWEAVE, true)
 ClothPrice(MAGEWEAVE_CLOTH, 2)
@@ -525,5 +555,112 @@ equal(buffPlan.crafts[1].recipeID, 102, "the usable buff recipe wins the tie")
 buffClient.level = 5
 local lowPlan = buffClient.ns.PlanRoute(buffClient.ns.RouteProfessions()[171])
 equal(lowPlan.crafts[1].recipeID, 101, "below its required level the buff recipe loses the tie")
+
+-- #621: a route the player is shopping for stays put. Buying its reagents, or the scan that comes with the
+-- purchase pricing another recipe lower, keeps the recipes and their order; only the player asking for a route
+-- afresh, or a route a step of which can no longer be walked, plans a different one.
+local shop = Client.load({
+	saved = { routeTargets = { [171] = 25 }, craftValue = "none", vendor = { [1000] = 10, [1001] = 11 } },
+	data = {
+		Thresholds = { [101] = { 1, 5, 8, 12 }, [102] = { 1, 5, 8, 30 } },
+		RecipeData = {
+			[101] = { skillLine = 171, reagents = { { itemID = 1000, quantity = 1 } } },
+			[102] = { skillLine = 171, reagents = { { itemID = 1001, quantity = 1 } } },
+		},
+		VendorPrices = {},
+		TrainerFees = {},
+		TrainerRanks = {},
+		ItemSellPrices = {},
+		GatheredBy = {},
+		LootedFrom = {},
+		ProfessionTrainers = {},
+		ScrollDrops = {},
+		WorldDrops = {},
+	},
+})
+local shopNs = shop.ns
+shop.professions = { { name = "Alchemy", id = 171, rank = 1, max = 75 } }
+shop.known[101], shop.known[102] = true, true
+shop.level = 20
+---@return SkillUpPlan
+local function ShopPlan()
+	return shopNs.PlanRoute(shopNs.RouteProfessions()[171])
+end
+local function Crafts(plan)
+	local ids = {}
+	for index, step in ipairs(plan.crafts) do
+		ids[index] = step.recipeID
+	end
+	return table.concat(ids, " ")
+end
+equal(Crafts(ShopPlan()), "101 102", "the cheaper recipe first, then the one that carries on")
+
+-- The player buys the first step's reagent, and Auctionator's follow-up scan prices the other recipe's reagent
+-- far lower: what they shopped for is what they keep.
+shop.bags[1000] = 12
+shop.Fire("BAG_UPDATE_DELAYED")
+equal(Crafts(ShopPlan()), "101 102", "buying a route's reagent keeps its recipes")
+shopNs.db.vendor[1000], shopNs.db.vendor[1001] = 100, 1
+shopNs.Changed("prices")
+equal(Crafts(ShopPlan()), "101 102", "and a scan that makes another recipe cheaper does not swap them")
+equal(shopNs.StepCost(101, 1), 100, "while the money a step shows is today's price")
+
+-- Asking for the route afresh, or a step it can no longer walk, does plan a different one.
+shopNs.Changed("replan")
+equal(Crafts(ShopPlan()), "102", "the page's Replan takes the cheaper recipe now")
+shopNs.db.vendor[1000], shopNs.db.vendor[1001] = 10, 11
+shopNs.Changed("prices")
+shopNs.Changed("replan")
+equal(Crafts(ShopPlan()), "101 102", "and its own recipes back again when they are cheaper")
+shopNs.db.vendor[1000] = nil
+shopNs.Changed("prices")
+equal(Crafts(ShopPlan()), "101 102", "a reagent the bags still hold keeps the route when its price goes")
+shop.bags[1000] = nil
+shop.Fire("BAG_UPDATE_DELAYED")
+equal(Crafts(ShopPlan()), "102", "a reagent gone from the bags with no price replans the route")
+shop.bags[1000] = 12
+shop.Fire("BAG_UPDATE_DELAYED")
+equal(Crafts(ShopPlan()), "102", "a new route is followed, not swapped back")
+shopNs.db.vendor[1000] = 10
+shopNs.Changed("prices")
+shopNs.Changed("replan")
+equal(Crafts(ShopPlan()), "101 102", "the route's own reagent is priced and bought again")
+shop.known[101] = nil
+shop.Fire("NEW_RECIPE_LEARNED")
+equal(Crafts(ShopPlan()), "102", "a recipe the route uses that is no longer known replans it")
+
+-- A route that trains a recipe for its next step: buying that recipe's scroll and learning it is the step done,
+-- so the route is planned again with the training gone and the crafts in the same order.
+local learn = Client.load({
+	saved = { routeTargets = { [171] = 25 }, craftValue = "none", vendor = { [1000] = 10, [1001] = 11 } },
+	data = {
+		Thresholds = { [101] = { 1, 5, 8, 12 }, [102] = { 1, 5, 8, 30 } },
+		RecipeData = {
+			[101] = { skillLine = 171, reagents = { { itemID = 1000, quantity = 1 } } },
+			[102] = { skillLine = 171, reagents = { { itemID = 1001, quantity = 1 } } },
+		},
+		VendorPrices = {},
+		TrainerFees = { [102] = { 100, 1 } },
+		TrainerRanks = {},
+		ItemSellPrices = {},
+		GatheredBy = {},
+		LootedFrom = {},
+		ProfessionTrainers = {},
+		ScrollDrops = {},
+		WorldDrops = {},
+	},
+})
+local learnNs = learn.ns
+learn.professions = { { name = "Alchemy", id = 171, rank = 1, max = 75 } }
+learn.known[101] = true
+learn.level = 20
+local taught = learnNs.PlanRoute(learnNs.RouteProfessions()[171])
+equal(Crafts(taught), "101 102", "the route trains the recipe that carries it on")
+equal(taught.training[1].recipeID, 102, "training it before its first craft")
+learn.known[102] = true
+learn.Fire("NEW_RECIPE_LEARNED")
+local learnedPlan = learnNs.PlanRoute(learnNs.RouteProfessions()[171])
+equal(#learnedPlan.training, 0, "learning the recipe drops the training step")
+equal(Crafts(learnedPlan), "101 102", "and keeps the crafts and their order")
 
 Client.report("plan_spec")

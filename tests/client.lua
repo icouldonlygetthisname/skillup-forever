@@ -1,10 +1,33 @@
 -- The stub game client the specs share: `local Client = dofile("tests/client.lua")`, from the repository root.
--- Client.load loads the files SkillUpForever.toc lists, in its order, against stubs of the client API the addon
--- calls, and returns a handle. A spec sets what the client holds (professions, bags, a merchant, Auctionator's
--- prices, the clock), fires the game's events, and asserts on what the addon produces. Nothing on `ns` is faked.
+-- Client.load loads ForeverCore first, as the client does, then the files SkillUpForever.toc lists, in its order,
+-- against stubs of the client API the addons call, and returns a handle. A spec sets what the client holds
+-- (professions, bags, a merchant, Auctionator's prices, the clock), fires the game's events, and asserts on what the
+-- addon produces. Nothing on `ns` is faked.
 local Client = {}
+local ForeverCore = dofile("tests/forever_core.lua")
 
 local ADDON = "SkillUpForever"
+
+-- The addon's TOC fields, as C_AddOns.GetAddOnMetadata reports them: a spec reads the same declared values the
+-- client gives the addon at load.
+---@return table<string, string>
+function Client.TocMetadata()
+	local metadata = {}
+	local file = io.open(ADDON .. ".toc", "r")
+	if not file then
+		return metadata
+	end
+	for line in file:lines() do
+		local key, value = line:match("^##%s*([^:]+):%s*(.-)%s*$")
+		if key then
+			metadata[key] = value
+		end
+	end
+	file:close()
+	return metadata
+end
+
+local TOC = Client.TocMetadata()
 
 local checks = 0
 function Client.equal(actual, expected, label)
@@ -151,18 +174,17 @@ end
 local OPTIONAL_GLOBALS = {
 	-- Core/Core.lua: the Legacy talent API, which only a client with the Legacy system has.
 	C_Traits = true,
-	-- UI/ForeverFamily.lua: the shared family table, published by whichever Forever addon loads it first.
-	ForeverFamily = true,
-	-- UI/Leaderboards.lua: the shared leaders window, published by whichever Forever addon loads it first.
-	ForeverLeaderboards = true,
-	-- Core/PeerStats.lua: the shared peer stats manager, published by whichever Forever addon loads it first.
-	ForeverPeerStats = true,
-	-- UI/TrackerHost.lua: the shared tracker host another Forever addon may publish before this one loads.
+	-- ForeverCore's saved table, made by its own ADDON_LOADED handler.
+	ForeverCoreDB = true,
+	-- ForeverCore's one tracker column: present only when an addon that still vendors an older copy loaded first,
+	-- which its own UI/TrackerHost.lua then adopts instead of drawing a second column.
 	ForeverTrackerHost = true,
-	-- Core/SafeCall.lua: the shared error journal registry, published by whichever Forever addon loads it first.
-	ForeverErrorJournal = true,
-	-- Core/Log.lua: the shared debug log switch, published by whichever Forever addon loads it first.
-	ForeverDebugLog = true,
+	-- ForeverCore's tracker host: the client's Edit Mode frame, present only once Edit Mode has loaded.
+	EditModeManagerFrame = true,
+	-- ForeverCore's context menu and minimap button: frames present only once their Blizzard addon has loaded.
+	WorldMapFrame = true,
+	Minimap = true,
+	MinimapCluster = true,
 	-- Core/SafeCall.lua: BugGrabber, when that error display is installed, so its captures join the journal.
 	BugGrabber = true,
 	-- SavedVariables: the addon's own table, nil before the client loads it or when its file is missing.
@@ -295,20 +317,46 @@ function Client.load(options)
 			c.protectedCalls[#c.protectedCalls + 1] = frame
 		end
 	end
+	-- The client calls an edit box's focus-gained handler with the player-input flag as a second argument, so a
+	-- bare widget method handed to SetScript receives it in its own first parameter (#269, #622).
+	local SCRIPT_ARGS = { OnEditFocusGained = { true } }
 	local function Scripts(frame, name)
+		local args = SCRIPT_ARGS[name]
+		local function Call(handler)
+			if args then
+				handler(frame, unpack(args))
+			else
+				handler(frame)
+			end
+		end
 		local script = frame.scripts[name]
 		if script then
-			script(frame)
+			Call(script)
 		end
 		for _, hooked in ipairs((frame.hooks or {})[name] or {}) do
-			hooked(frame)
+			Call(hooked)
 		end
 	end
 	function Methods:RegisterEvent(event)
 		self.events[event] = true
 	end
+	function Methods:UnregisterEvent(event)
+		self.events[event] = nil
+	end
+	function Methods:UnregisterAllEvents()
+		self.events = {}
+	end
 	function Methods:SetScript(name, fn)
 		self.scripts[name] = fn
+	end
+	function Methods:GetScript(name)
+		return self.scripts[name]
+	end
+	function Methods:IsVisible()
+		return self.shown ~= false
+	end
+	function Methods:IsMouseOver()
+		return self.mouseOver == true
 	end
 	-- A scroll bar's percentage, and the callbacks ScrollBarMixin triggers when it moves.
 	function Methods:SetScrollPercentage(percentage)
@@ -412,7 +460,28 @@ function Client.load(options)
 	function Methods:CreateTexture()
 		return NewFrame(nil, self)
 	end
+	-- A mask is a region too; a texture keeps the masks drawn over it, and a status bar its fill texture, so a spec
+	-- can check what shapes a fill.
+	function Methods:CreateMaskTexture()
+		return NewFrame(nil, self)
+	end
+	function Methods:AddMaskTexture(mask)
+		self.masks = self.masks or {}
+		self.masks[#self.masks + 1] = mask
+	end
+	function Methods:SetStatusBarTexture(texture)
+		self.statusBarTexture = texture
+	end
+	function Methods:GetStatusBarTexture()
+		return self.statusBarTexture
+	end
 	-- The atlas a texture was given, so a spec can check which art it draws.
+	function Methods:GetAtlas()
+		return self.atlas
+	end
+	function Methods:SetTexCoord(...)
+		self.texCoord = { ... }
+	end
 	function Methods:SetAtlas(atlas)
 		self.atlas = atlas
 	end
@@ -535,9 +604,15 @@ function Client.load(options)
 		self.portrait = self.portrait or NewFrame(nil, self)
 		return self.portrait
 	end
+	-- Focusing fires the client's own focus-gained script, as the game does, so a spec exercises the handler
+	-- rather than only setting the method's reference (#622).
 	function Methods:SetFocus()
+		local was = self.focused == true
 		c.focus = self
 		self.focused = true
+		if not was then
+			Scripts(self, "OnEditFocusGained")
+		end
 	end
 	function Methods:HasFocus()
 		return self.focused == true
@@ -545,7 +620,15 @@ function Client.load(options)
 	function Methods:ClearFocus()
 		self.focused = false
 	end
-	function Methods:HighlightText()
+	-- HighlightText takes an optional start and stop character index; the client validates both, so a handler's
+	-- own second argument passed here as `start` raises instead of passing silently (#622).
+	function Methods:HighlightText(start, stop)
+		if start ~= nil and type(start) ~= "number" then
+			error("bad argument #2 to 'HighlightText' (outside of expected range -2147483648 to 2147483647)", 2)
+		end
+		if stop ~= nil and type(stop) ~= "number" then
+			error("bad argument #3 to 'HighlightText' (outside of expected range -2147483648 to 2147483647)", 2)
+		end
 		self.highlighted = self.text
 	end
 	Methods.RegisterForDrag, Methods.StartMoving, Methods.StopMovingOrSizing = noop, noop, noop
@@ -557,6 +640,17 @@ function Client.load(options)
 	local TrackerModule = {}
 	function TrackerModule:MarkDirty()
 		self.dirty = (self.dirty or 0) + 1
+	end
+	-- Blizzard's ObjectiveTrackerModuleMixin:Update: no layout in combat, then the section draws its rows.
+	function TrackerModule:Update(availableHeight)
+		if not self:CanUpdate() then
+			return
+		end
+		self.availableHeight = availableHeight or 0
+		self:LayoutContents()
+	end
+	function TrackerModule:GetContentsHeight()
+		return self.contentsHeight or 0
 	end
 	function TrackerModule:GetBlock(id)
 		local block = { id = id, lines = {}, SetHeader = noop }
@@ -570,6 +664,18 @@ function Client.load(options)
 	end
 	function TrackerModule.LayoutBlock()
 		return true
+	end
+
+	-- The templates this harness knows: the stock ones it builds, plus the virtual templates an addon's XML defines
+	-- as ForeverCore.load registers them. A template registered from XML is built as the stock template it inherits,
+	-- which is what the client's own template loader gives a frame.
+	local TEMPLATES = {
+		-- Blizzard's objective line, the stock template ForeverCore's interactive line inherits.
+		ObjectiveTrackerLineTemplate = { type = "Frame" },
+	}
+	---@param template { name: string, type: string, inherits?: string }
+	function G.RegisterTemplate(template)
+		TEMPLATES[template.name] = { type = template.type, inherits = template.inherits }
 	end
 
 	-- Templates the Forever client never loads, so CreateFrame fails on them as the game does. The list holds the
@@ -588,21 +694,31 @@ function Client.load(options)
 				end
 			end
 		end
+		local stock = template
+		if type(template) == "string" and TEMPLATES[template] then
+			stock = TEMPLATES[template].inherits or template
+		end
 		local frame = NewFrame(name, parent)
 		frame.template = template
-		if template == "ObjectiveTrackerModuleTemplate" then
+		-- NumericInputSpinnerTemplate's XML gives its box the two arrow buttons and their wheel catcher.
+		if template == "NumericInputSpinnerTemplate" then
+			frame.IncrementButton = NewFrame(nil, frame)
+			frame.DecrementButton = NewFrame(nil, frame)
+			frame.MouseWheelCatcher = NewFrame(nil, frame)
+		end
+		if stock == "ObjectiveTrackerModuleTemplate" then
 			for key, method in pairs(TrackerModule) do
 				frame[key] = method
 			end
-		elseif template == "LargeSideTabButtonTemplate" then
+		elseif stock == "LargeSideTabButtonTemplate" then
 			frame.Icon = NewFrame(nil, frame)
-		elseif template == "PanelTabButtonTemplate" then
+		elseif stock == "PanelTabButtonTemplate" then
 			-- The regions PanelTemplates_SelectTab and PanelTemplates_DeselectTab toggle, and the text they anchor.
 			frame.Text = NewFrame(nil, frame)
 			for _, key in ipairs({ "Left", "Middle", "Right", "LeftActive", "MiddleActive", "RightActive" }) do
 				frame[key] = NewFrame(nil, frame)
 			end
-		elseif template == "WowScrollBoxList" then
+		elseif stock == "WowScrollBoxList" then
 			function frame:SetDataProvider(provider)
 				self.provider = provider
 			end
@@ -621,10 +737,30 @@ function Client.load(options)
 					end, elementData)
 				end
 			end
-		elseif template == "ItemButtonTemplate" then
+		elseif stock == "ScrollFrameTemplate" then
+			-- The template's own scroll bar child, which the shared context menu shows when it overflows.
+			frame.ScrollBar = NewFrame(nil, frame)
+		elseif stock == "MinimalScrollBar" then
+			-- The minimal bar's own parts, which a horizontal bar re-anchors and the client's mixin drives.
+			frame.Track = NewFrame(nil, frame)
+			for _, key in ipairs({ "Begin", "End", "Middle" }) do
+				frame.Track[key] = NewFrame(nil, frame.Track)
+			end
+			frame.Track.Thumb = NewFrame(nil, frame.Track)
+			for _, key in ipairs({ "Begin", "End", "Middle" }) do
+				frame.Track.Thumb[key] = NewFrame(nil, frame.Track.Thumb)
+			end
+			frame.Back = NewFrame(nil, frame)
+			frame.Back.Texture = NewFrame(nil, frame.Back)
+			frame.Forward = NewFrame(nil, frame)
+			frame.Forward.Texture = NewFrame(nil, frame.Forward)
+			frame.Track.Thumb.isLocalScrollControl = true
+			frame.Back.isLocalScrollControl = true
+			frame.Forward.isLocalScrollControl = true
+		elseif stock == "ItemButtonTemplate" then
 			frame.Icon = NewFrame(nil, frame)
 			frame.Count = NewFrame(nil, frame)
-		elseif template == "MerchantItemTemplate" then
+		elseif stock == "MerchantItemTemplate" then
 			frame.Name = NewFrame(nil, frame)
 			local button = NewFrame(nil, frame)
 			-- The Mainline template's <ItemButton> is the client's intrinsic ItemButton: its icon is `icon`
@@ -714,29 +850,40 @@ function Client.load(options)
 			end,
 		})
 	end
-	G.hooksecurefunc = function()
+	G.hooksecurefunc = function(target, method, callback)
+		if type(target) == "table" and target.isLocalScrollControl and method == "OnButtonStateChanged" then
+			target[method] = callback
+			return
+		end
 		error("native methods must stay unhooked")
 	end
 	G.OBJECTIVE_TRACKER_COLOR = { Complete = "complete" }
-
-	-- The tracker host another Forever addon already published; UI/TrackerHost.lua adopts it instead of
-	-- building its own, whose frames tracker_host_spec covers.
-	c.host = {
-		Attach = function(module)
-			if not c.host.IsAttached(module) then
-				c.tracker[#c.tracker + 1] = module
+	-- Blizzard's quest-tracker mixin and header, which ForeverCore's own optional quest section extends.
+	G.QuestObjectiveTrackerMixin = {}
+	G.TRACKER_HEADER_QUESTS = "Quests"
+	-- The addon-owned frame pools the tracker host builds, and the template reader it asks for a name.
+	G.CreateFramePoolCollection = function()
+		return {
+			GetOrCreatePool = function()
+				return {
+					Acquire = function()
+						return NewFrame(), true
+					end,
+					Release = noop,
+				}
+			end,
+			Release = noop,
+		}
+	end
+	G.C_XMLUtil = {
+		GetTemplateInfo = function(name)
+			local template = TEMPLATES[name]
+			if template then
+				return { type = template.type, inherits = template.inherits }
 			end
-		end,
-		IsAttached = function(module)
-			for _, attached in ipairs(c.tracker) do
-				if attached == module then
-					return true
-				end
-			end
-			return false
+			return { type = "Frame" }
 		end,
 	}
-	G.ForeverTrackerHost = c.host
 
 	-- The attached sections laid out now: { { id, lines = { { key, text } } } }, top to bottom.
 	function c.Tracker()
@@ -767,10 +914,11 @@ function Client.load(options)
 		Scripts(tab, "OnClick")
 	end
 
-	---@return integer frames how many frames registered for the event
+	---@return integer frames how many frames the addon made registered for the event
 	function c.Listeners(event)
 		local count = 0
-		for _, frame in ipairs(c.frames) do
+		for index = c.coreFrames + 1, #c.frames do
+			local frame = c.frames[index]
 			count = count + (frame.events[event] and 1 or 0)
 		end
 		return count
@@ -1124,7 +1272,14 @@ function Client.load(options)
 						return string.format("%sx%d", request.searchString, request.quantity)
 					end,
 					MultiSearchAdvanced = function(_, searches)
-						c.auctionSearches[#c.auctionSearches + 1] = searches
+						local formatted = {}
+						for index, request in ipairs(searches) do
+							assert(type(request) == "table", "Auctionator advanced search requires records")
+							assert(type(request.searchString) == "string", "Auctionator requires searchString")
+							assert(request.isExact == true, "reagent searches must be exact")
+							formatted[index] = string.format("%sx%d", request.searchString, request.quantity)
+						end
+						c.auctionSearches[#c.auctionSearches + 1] = formatted
 					end,
 				},
 			},
@@ -1282,6 +1437,11 @@ function Client.load(options)
 			return fn(...) -- multi-value: the wrapped client function's results pass through
 		end
 	end
+	-- ForeverCore 1.8.0 dispatches the restricted openers through securecallfunction; count those calls the same way.
+	G.securecallfunction = function(fn, ...)
+		c.secureSettingsCalls = (c.secureSettingsCalls or 0) + 1
+		return fn(...) -- multi-value: the client function's results pass through
+	end
 	G.CreateSettingsButtonInitializer = noop
 	G.MinimalSliderWithSteppersMixin = { Label = { Right = 1 } }
 	-- The player changing one of the addon's settings in the options panel.
@@ -1352,6 +1512,7 @@ function Client.load(options)
 		AddInitializedFrameCallback = noop,
 	}
 	G.Menu = { ModifyMenu = noop }
+	G.MenuUtil = { ModifyMenu = noop }
 	-- The client's scroll-box list: a view the addon fills with row initialisers, and its data provider.
 	G.CreateScrollBoxListLinearView = function()
 		local view = {
@@ -1466,13 +1627,14 @@ function Client.load(options)
 	c.addons = {}
 	G.C_AddOns = {
 		GetAddOnMetadata = function(addon, field)
-			if field == "X-Website" and addon == ADDON then
-				return c.website
-			end
-			if field == "Version" then
-				if addon == ADDON then
+			if addon == ADDON then
+				-- The packager fills Version into a release; the checkout keeps its keyword.
+				if field == "Version" then
 					return "1.2.3"
 				end
+				return TOC[field]
+			end
+			if field == "Version" then
 				for _, other in ipairs(c.addons) do
 					if other[1] == addon then
 						return other[2]
@@ -1505,15 +1667,38 @@ function Client.load(options)
 		return target
 	end
 
-	--[[ The addon ]]
+	--[[ ForeverCore, then the addon ]]
+
+	-- ForeverCore loads first: its TOC's files into this client, then its own ADDON_LOADED, as the client does for a
+	-- dependency. The tests never fake its host or its shared tables, so a spec exercises the real ones.
+	ForeverCore.load(G)
+	c.Fire("ADDON_LOADED", "ForeverCore")
+	-- Frames made so far belong to ForeverCore; the addon's own start at the next index.
+	c.coreFrames = #c.frames
+	c.host = G.ForeverCore.TrackerHost
+	if c.host then
+		local attach = c.host.Attach
+		-- ForeverCore's own quest section joins the same column from v1.2.0, and it lays itself out through
+		-- Update rather than LayoutContents. c.tracker holds this addon's own sections, which the specs drive.
+		function c.host.Attach(module, show)
+			attach(module, show)
+			local name = module:GetName()
+			local own = type(name) ~= "string" or not name:find("^ForeverCore")
+			if own and not G.tContains(c.tracker, module) and c.host.IsAttached(module) then
+				c.tracker[#c.tracker + 1] = module
+			end
+		end
+	end
 
 	G.SkillUpForeverDB = options.saved
 	local data = options.data
 	for line in io.lines(ADDON .. ".toc") do
 		local file = line:match("^([%w_\\]+%.lua)%s*$")
 		if file then
-			-- The fixtures stand in for the bundled tables before any file reads them.
-			if data and not file:find("^Locales\\") and not file:find("^Data\\") then
+			-- The fixtures stand in for the bundled tables before any addon file reads them; the two broken checks
+			-- (Core/ForeverRequire.lua and Core/Require.lua) and the locale files read no data.
+			local warning = file == "Core\\ForeverRequire.lua" or file == "Core\\Require.lua"
+			if data and not file:find("^Locales\\") and not file:find("^Data\\") and not warning then
 				for name, value in pairs(data) do
 					c.ns[name] = value
 				end

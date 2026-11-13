@@ -9,6 +9,8 @@ L["%d %s"] = "%d %s"
 L["%d crafts to %d, %s"] = "制造%d次至%d，%s"
 L["%d crafts to %d, %s, at %s"] = "制造%d次至%d，%s，地点：%s"
 L["%d more"] = "还有%d个"
+L["%d of %d"] = "%d/%d"
+L["%d reagents have no price"] = "%d 种材料没有价格"
 L["%d to %d"] = "%d至%d"
 L["%d, from %d to %d"] = "%d次，从%d到%d"
 L["%dd ago"] = "%d天前"
@@ -21,15 +23,15 @@ L["%s is in %s."] = "%s在%s。"
 L["%s trainer"] = "%s训练师"
 L["%s until %d"] = "%s直到%d"
 L["%s, %d"] = "%s，%d"
-L["%s, %d/%d"] = "%s，%d/%d"
 L["%s, %s, to %d"] = "%s，%s，至%d"
 L["%s, source unknown"] = "%s，来源未知"
 L["%s: %d moved, %d confirmed at a trainer, %d wrong."] =
 	"%s：移动%d个，在训练师处确认%d个，错误%d个。"
 L["+%d more"] = "另有%d个"
-L["/su skipped lists the recipes you skipped, with their IDs."] = "/su skipped 列出你跳过的配方及其ID。"
-L["/su unskip <recipe ID> shows one again, /su unskip all every one."] =
-	"/su unskip <recipe ID> 恢复显示一个，/su unskip all 恢复全部。"
+L["/skillup skipped lists the recipes you skipped, with their IDs."] =
+	"/skillup skipped 列出你跳过的配方及其ID。"
+L["/skillup unskip <recipe ID> shows one again, /skillup unskip all every one."] =
+	"/skillup unskip <recipe ID> 恢复显示一个，/skillup unskip all 恢复全部。"
 L["A Reagents tab on a merchant's window that lists the reagents your tracked routes still need from that merchant and their total cost. Buy them from the merchant's own window."] =
 	"在商人窗口显示材料标签页，列出你追踪的路线仍需要从该商人处购买的材料及其总费用。请在商人窗口中购买。"
 L["A material your professions gather costs what selling it would bring instead of nothing: its auction price after the 5% cut, or its vendor sell price if that is more. Used for the route and the costs on recipe rows. Auction prices need Auctionator or TradeSkillMaster."] =
@@ -37,7 +39,6 @@ L["A material your professions gather costs what selling it would bring instead 
 L["Keeps the shared Forever tracker where you put it. The grip at its top no longer drags it."] =
 	"将共享的 Forever 追踪器保持在您放置的位置。顶部的拖拽手柄不再移动它。"
 L["Lock the tracker"] = "锁定追踪器"
-L["Tracker background"] = "追踪器背景"
 
 L["AH"] = "拍卖行"
 L["Add the start of each recipe's difficulty range. This is separate from the skill needed to learn it."] =
@@ -82,34 +83,28 @@ L["Close"] = "关闭"
 L["Complete %s at %d"] = "完成%s（技能%d）"
 L["Complete %s at %d (level %d)"] = "完成%s（技能%d，等级%d）"
 L["Complete %s first: you're at your cap."] = "请先完成%s：你已达上限。"
-L["Copy link"] = "复制链接"
-L["Copy the address, then open it in your browser."] = "复制该地址，然后在浏览器中打开。"
 L["Cost"] = "成本"
 L["Count what crafts sell for"] = "计入制造品的售价"
 L["Craft %d %s"] = "制造%d个%s"
 L["Craft %d of %d× %s"] = "制造%d/%d× %s"
 L["Craft %d× %s"] = "制造%d× %s"
 L["Craft %s"] = "制造%s"
+L["Craft"] = "制造"
 L["Craft next"] = "制造下一个"
 L["Crafted gear"] = "制造装备"
 L["Crafts"] = "制造次数"
 L["Don't count it"] = "不计入"
-L["Don't suggest this again"] = "不再推荐"
-L["Drag to move"] = "拖动以移动"
 L["Dropped by"] = "掉落自"
 L["Each"] = "单价"
-L["Each click puts the next one in the search box; press Search."] =
-	"每次点击会把下一个填入搜索框；然后点击搜索。"
 L["Enable Shortest Path Forever for walked routes and boat times."] =
 	"启用Shortest Path Forever以获得步行路线和船只时刻。"
 L["Every recipe that uses it"] = "所有使用它的配方"
 L["Fee"] = "费用"
-L["Fee %s, requires %s (%d)"] = "费用%s，需要%s（%d）"
+L["Fees"] = "费用"
 L["Feet"] = "脚"
 L["Finger"] = "手指"
 L["First used at"] = "首次使用于"
 L["Forever addons"] = "Forever插件"
-L["Forever tracker"] = "Forever追踪栏"
 L["Gather %d %s"] = "采集%d个%s"
 L["Gathering skill on nodes"] = "采集点的采集技能"
 L["Hands"] = "手部"
@@ -117,14 +112,12 @@ L["Have (bags and bank)"] = "已有（背包和银行）"
 L["Head"] = "头部"
 L["Herb and ore node tooltips show the skill they need and its colour at yours (English client only). Skinnable corpses show ? until the skinning rule is confirmed on Forever."] =
 	"草药和矿脉的鼠标提示会显示所需技能及其相对你技能的颜色（仅限英文客户端）。可剥皮的尸体在Forever上的剥皮规则确认前显示?。"
-L["Hide this section"] = "隐藏此部分"
 L["Install AtlasLoot to see the recipes vendors, quests and drops would add."] =
 	"安装AtlasLoot以查看商人、任务和掉落可提供的配方。"
-L["Install Questie and AtlasLoot to see where recipes, vendors and trainers are."] =
-	"安装Questie和AtlasLoot以查看配方、商人和训练师的位置。"
-L["Install Questie to see vendors, quests and trainers, with waypoints to them."] =
-	"安装Questie以查看商人、任务和训练师，并可设置路径点。"
-L["Installed, turned off"] = "已安装，已禁用"
+L["Install QuestieDB and AtlasLoot to see where recipes, vendors and trainers are."] =
+	"安装QuestieDB和AtlasLoot以查看配方、商人和训练师的位置。"
+L["Install QuestieDB to see vendors, quests and trainers, with waypoints to them."] =
+	"安装QuestieDB以查看商人、任务和训练师，并可设置路径点。"
 L["Its trainer should teach these at your skill now:"] = "以你现在的技能，训练师应该能教你这些："
 L["Kept in the Auctionator list '%s'."] = "已保存在Auctionator列表“%s”中。"
 L["Latest Auctionator prices."] = "最新的Auctionator价格。"
@@ -144,6 +137,8 @@ L["Neck"] = "颈部"
 L["Need %d more %s"] = "还需要%d个%s"
 L["Need a %s in your bags."] = "背包中需要%s。"
 L["Needs %s %d"] = "需要%s %d"
+L["Needs %s, sells back %s"] = "需要 %s，卖出返还 %s"
+L["Needs %s, sells back %s (incomplete)"] = "需要 %s，卖出返还 %s（不完整）"
 L["Net per craft"] = "每次制造净成本"
 L["Newest recipes first"] = "最新配方优先"
 L["Next to the recipe"] = "配方旁边"
@@ -154,14 +149,12 @@ L["No skill data for this recipe yet."] = "此配方暂无技能数据。"
 L["No trainer teaches this rank: a book does."] = "没有训练师教授此等级：需要书籍。"
 L["No trainer teaches this rank: a quest does."] = "没有训练师教授此等级：需要任务。"
 L["Not in this route: you chose Not this recipe."] = "不在此路线中：你选择了“不要此配方”。"
-L["Not installed"] = "未安装"
 L["Not this recipe"] = "不要此配方"
 L["Nothing priced you know skills up past %d."] = "你已知且有价格的配方都无法将技能提升到%d以上。"
 L["Nothing to buy for this route."] = "此路线无需购买任何物品。"
 L["Nothing to craft on this route."] = "此路线无需制造任何物品。"
 L["Nothing you know skills up past %d."] = "你已知的配方都无法将技能提升到%d以上。"
 L["Off hand"] = "副手"
-L["On"] = "开启"
 L["On %s"] = "在%s"
 L["One line in chat the first time a new version loads."] = "新版本首次加载时在聊天框显示一行。"
 L["Open"] = "打开"
@@ -173,22 +166,13 @@ L["Per craft"] = "每次制作"
 L["Per skill-up"] = "每点技能"
 L["Per skill-up is the cost of one skill point. Per craft is what one craft costs or earns, shown on recipes that no longer give skill too."] =
 	"每点技能是提升一点技能的成本。每次制作是一次制作的成本或收益，不再提升技能的配方也会显示。"
-L["Picks quests for your level and plans them into one journey."] =
-	"挑选适合你等级的任务，并规划成一段旅程。"
-L["Plans the cheapest route to your next profession rank."] = "规划升到下一专业等级最省钱的路线。"
-L["Plans the quickest way anywhere and guides you there, with live boat and zeppelin times."] =
-	"规划前往任何地点的最快路线并为你引路，附带船只和飞艇的实时时刻。"
 L["Price"] = "价格"
-L["Price %s, requires %s (%d)"] = "价格%s，需要%s（%d）"
 L["Prices"] = "价格"
 L["Profession reagents"] = "专业材料"
 L["Profit per craft"] = "每次制造利润"
 L["Profit per skill-up"] = "每点技能利润"
 L["Quest"] = "任务"
-L["Quest automation, rare alerts and merchant handling for the default UI."] =
-	"为默认界面提供任务自动化、稀有怪提醒和商人处理。"
 L["Quest giver"] = "任务NPC"
-L["Quest, requires %s (%d)"] = "任务，需要%s（%d）"
 L["Raises your skill cap to %d."] = "将你的技能上限提高到%d。"
 L["Ranged"] = "远程"
 L["Read %s at %d"] = "阅读%s（技能%d）"
@@ -209,12 +193,16 @@ L["Recipes from vendors, quests and drops that would carry it on:"] =
 L["Required skill, skill-up chance and cost on profession trainer recipes, and which one is best to train next for your route."] =
 	"在专业训练师的配方上显示所需技能、技能提升几率和成本，并指出你的路线下一步最适合学习哪个。"
 L["Requires"] = "需要"
+L["Replan"] = "重新规划"
 L["Route"] = "路线"
 L["Route and trainer"] = "路线和训练师"
 L["Route incomplete: %d recipes left out, their reagents not priced yet."] =
 	"路线不完整：遗漏了%d个配方，其材料尚无价格。"
 L["Route needs"] = "路线需要"
 L["Route: %d/%d · %s to %d"] = "路线：%d/%d · %s至%d"
+L["Sales"] = "出售"
+L["Scales the shared Forever tracker. 100% matches the game's own tracker."] =
+	"调整共享Forever追踪栏的大小。100%与游戏自身的追踪栏一致。"
 L["Scan the auction house with Auctionator, or visit a vendor, to price reagents."] =
 	"用Auctionator扫描拍卖行或访问商人来获取材料价格。"
 L["Scroll"] = "配方"
@@ -226,8 +214,6 @@ L["Set waypoint"] = "设置路径点"
 L["Shift-click to link the scroll."] = "Shift-点击以链接配方。"
 L["Shift: used in %d of your recipes"] = "Shift：用于你的%d个配方"
 L["Shoulder"] = "肩部"
-L["Show a quiet line where one of my other Forever addons would help. Only for addons you don't have."] =
-	"在我的其他Forever插件能帮上忙的地方显示一行不显眼的提示。仅限你尚未安装的插件。"
 L["Show again: %s"] = "恢复显示：%s"
 L["Show cost per skill-up"] = "显示每点技能成本"
 L["Show gear I cannot make yet"] = "显示我还不能制造的装备"
@@ -240,8 +226,6 @@ L["Show the crafted gear tab"] = "显示制造装备标签页"
 L["Show the levelling route tab"] = "显示升级路线标签页"
 L["Show thresholds tooltip"] = "显示分界点提示"
 L["Show tracked professions"] = "显示追踪的专业"
-L["Shows the Legacy challenges you can advance in each zone."] =
-	"显示每个地区中你可以推进的传承挑战。"
 L["Skill  %d/%d     Target"] = "技能  %d/%d     目标"
 L["Skill points a craft"] = "每次制造技能点"
 L["Skill range start"] = "区间起点"
@@ -263,30 +247,20 @@ L["Source unknown"] = "来源未知"
 L["Stop tracking"] = "取消追踪"
 L["Subtract what the crafted item sells for from its cost. Auction prices need Auctionator or TradeSkillMaster, are after the 5% cut, and may not sell."] =
 	"从成本中减去制造物品的售价。拍卖价需要Auctionator/TradeSkillMaster，已扣除5%手续费，且不一定能卖出。"
-L["Suggest my other Forever addons"] = "推荐我的其他Forever插件"
 L["Taught by %s trainers."] = "由%s训练师教授。"
-L["The Forever addons are free, with nothing locked behind them. If they help, you can buy me a coffee."] =
-	"Forever 插件全部免费，没有任何付费才能使用的内容。如果它们对你有帮助，可以请我喝杯咖啡。" -- mt
 L["The place this recipe is taught isn't known yet."] = "尚不清楚在哪里学习此配方。"
-L["The recipe list grows to the longest recipe name in the open profession, and the window with it, up to the room your screen has. Turn it off to keep the window's own width."] =
-	"配方列表和窗口会加宽，以容纳当前专业最长的配方名称，最宽到屏幕空间为止。关闭后保持窗口原有宽度。"
 L["The rest comes from a vendor or your gathering."] = "其余来自商人或你的采集。"
 L["The route asks for %d to reach %d in 9 runs of 10; a worse run needs more."] =
 	"路线按%d个计算，十次中有九次能达到%d；运气差时需要更多。"
 L["The source of this recipe isn't known."] = "此配方的来源未知。"
-L["The text is selected. Press Ctrl+C (Cmd+C on a Mac) to copy it, then paste it into your bug report."] =
-	"文本已选中。按Ctrl+C（Mac上为Cmd+C）复制，然后粘贴到你的错误报告中。"
-L["The tracker is locked. Turn off Lock the tracker to move it."] =
-	"追踪器已锁定。关闭“锁定追踪器”即可移动它。"
 L["These reagents have no vendor price. Auction prices need Auctionator or TradeSkillMaster."] =
 	"这些材料没有商人价格。拍卖价需要Auctionator/TradeSkillMaster。"
-L["This addon"] = "本插件"
 L["To buy"] = "待购买"
 L["Tool"] = "工具"
 L["Tooltips and sorting"] = "鼠标提示和排序"
-L["Total %s"] = "总计%s"
 L["Track"] = "追踪"
 L["Tracked routes (Shift for all)"] = "追踪的路线（Shift显示全部）"
+L["Tracker scale"] = "追踪栏大小"
 L["Train %s"] = "学习%s"
 L["Train %s at %d"] = "学习%s（技能%d）"
 L["Train %s at %d (level %d)"] = "学习%s（技能%d，等级%d）"
@@ -295,8 +269,8 @@ L["Train %s first: you're at your cap."] = "请先学习%s：你已达上限。"
 L["Trinket"] = "饰品"
 L["Turn this off to drag the shared Forever tracker anywhere on screen."] =
 	"关闭此项后可将共享的Forever追踪栏拖到屏幕任意位置。"
-L["Update Questie to see vendors, quests and trainers, with waypoints to them."] =
-	"更新Questie以查看商人、任务和训练师，并可设置路径点。"
+L["Update QuestieDB to see vendors, quests and trainers, with waypoints to them."] =
+	"更新QuestieDB以查看商人、任务和训练师，并可设置路径点。"
 L["Used in"] = "用于"
 L["Value gathered materials at what they'd sell for"] = "按售价计算采集的材料"
 L["Vendor"] = "商人"
@@ -315,13 +289,12 @@ L["Where the tooltip goes when you hover a recipe. Beside the window, it stays c
 	"鼠标指向配方时提示显示的位置。放在窗口旁边就不会挡住材料。"
 L["While the auction house is open, the Professions window offers a search for the selected recipe's reagents: as many as the crafts you choose still need after your bags and bank. Auctionator's shopping list carries the quantities; without it, each click puts the next reagent in the search box."] =
 	"拍卖行打开时，专业窗口可以搜索所选配方的材料：数量为扣除背包和银行后，你选择的制造次数仍需要的数量。Auctionator的购物清单会带上数量；没有它时，每次点击会把下一个材料填入搜索框。"
-L["Widen the recipe list to fit recipe names"] = "加宽配方列表以容纳配方名称"
 L["With Shortest Path Forever, a click leads you there."] = "有Shortest Path Forever时，点击即可带你前往。"
 L["With Shortest Path Forever, this picks the nearest by travel time and leads you there."] =
 	"有Shortest Path Forever时，会按路程时间选择最近的并带你前往。"
 L["World drop"] = "世界掉落"
 L["Wrist"] = "手腕"
-L["You have it, requires %s (%d)"] = "已拥有，需要%s（%d）"
+L["You have it"] = "已拥有"
 L["You have this book: read it."] = "你有这本书：阅读它。"
 L["You know it"] = "已学会"
 L["You: %d"] = "你：%d"
@@ -362,8 +335,6 @@ L["searching for %s: you need %d more."] = "正在搜索%s：你还需要%d个�
 L["sorting failed and has been turned off: %s"] = "排序失败，已关闭：%s"
 L["the %s book"] = "书籍%s"
 L["the %s quest"] = "任务%s"
-L["the objective tracker isn't available, so tracked reagents can't be shown."] =
-	"目标追踪栏不可用，因此无法显示追踪的材料。"
 L["the reagent names are still loading; search again in a moment."] =
 	"材料名称仍在加载；请稍后再次搜索。"
 L["today"] = "今天"
@@ -394,40 +365,32 @@ L["%d x %s - price unknown"] = "%d x %s - 价格未知"
 L["%s to %d"] = "%s至%d"
 L[", "] = "，"
 L[", price seen %d days ago"] = "，%d 天前的价格"
-L["/su export - show the trainer requirements this character has seen, to paste into a report"] =
-	"/su export - 显示此角色见过的训练师要求，以便粘贴到报告中"
-L["/su issue - report a bug or request a feature with a ready-made GitHub issue link"] =
-	"/su issue - 报告错误或请求功能，并附上现成的 GitHub issue 链接"
-L["/su report - show a report to copy into a bug report"] = "/su report - 显示报告，以便复制到错误报告中"
+L["/skillup export - show the trainer requirements this character has seen, to paste into a report"] =
+	"/skillup export - 显示此角色见过的训练师要求，以便粘贴到报告中"
+L["/skillup issue - report a bug or request a feature with a ready-made GitHub issue link"] =
+	"/skillup issue - 报告错误或请求功能，并附上现成的 GitHub issue 链接"
+L["/skillup report - show a report to copy into a bug report"] =
+	"/skillup report - 显示报告，以便复制到错误报告中"
 L[": "] = "："
 L["A buy trip needs Shortest Path Forever."] = "购买行程需要 Shortest Path Forever。"
-L["Bug"] = "错误"
-L["Bug: "] = "错误："
-L["Copy issue link"] = "复制 issue 链接"
 L["Copy list"] = "复制列表"
-L["Copy report"] = "复制报告"
-L["Feature request"] = "功能请求"
-L["Feature request: "] = "功能请求："
+L["Copy shopping list"] = "复制购物清单"
 L["Gather"] = "采集"
 L["Need %d, have %d, missing %d  %s  %s each  %s"] = "需要 %d，已有 %d，缺少 %d  %s  每个 %s  %s"
 L["No tracked profession"] = "没有追踪的专业"
 L["Nothing is missing from the shopping list."] = "购物清单里没有缺少的东西。"
 L["Nothing to buy"] = "没有可买的东西"
 L["Plan buy trip"] = "规划购买"
-L["Report a bug or request a feature"] = "报告错误或请求功能"
+L["Plan this route again from today's prices and recipes."] = "根据今天的价格和配方重新规划此路线。"
 L["Shopping list"] = "购物清单"
 L["Shortest Path Forever cannot plan the full trip; setting a waypoint to the first vendor."] =
 	"Shortest Path Forever 无法规划整个行程；已设置前往第一个商人的路径点。"
 L["Shortest Path Forever is needed to plan this trip."] = "规划此行程需要 Shortest Path Forever。"
 L["SkillUp Forever shopping list"] = "SkillUp Forever 购物清单"
-L["The link is selected. Press Ctrl+C (Cmd+C on a Mac), then paste into a browser; GitHub opens a filled-in issue."] =
-	"链接已选中。按Ctrl+C（Mac上为Cmd+C），然后粘贴到浏览器中；GitHub 会打开填好的 issue。"
 L["The text is selected. Press Ctrl+C (Cmd+C on a Mac) to copy it."] =
 	"文本已选中。按Ctrl+C（Mac上为Cmd+C）复制。"
-L["Title"] = "标题"
 L["Total for priced items: "] = "有价格物品合计："
 L["Unknown"] = "未知"
-L["What happened, or what you would like"] = "发生了什么，或你希望有什么"
 L["no trainer requirement seen yet: open a profession trainer, then try again."] =
 	"尚未见到训练师要求：打开专业训练师，然后重试。"
 L["on %s"] = "在%s身上"
@@ -447,41 +410,6 @@ L["Pinned: %s"] = "已固定：%s" -- mt
 L["The newest pin takes priority where skill ranges overlap."] =
 	"技能范围重叠时，最近固定的配方优先。" -- mt
 L["Pinned (%d)"] = "已固定（%d）" -- mt
-L["/su share on|off - control sharing with guild and group"] = "/su share on|off - 控制与公会和队伍共享"
-L["Share observed recipe totals with guild and group"] = "与公会和队伍共享观察到的配方总数"
-L["(you)"] = "(你)"
-L["All time"] = "全部时间"
-L["Forever Leaderboards"] = "Forever Leaderboards"
-L["Forever standing"] = "Forever 总排名"
-L["Forever: %s overall"] = "Forever：总计 %s"
-L["Forever: %s overall this week"] = "Forever：本周总计 %s"
-L["No one has reported yet."] = "还没有人上报。"
-L["Others' values are player-reported."] = "其他玩家的数值由玩家自行上报。"
-L["Overall"] = "总览"
-L["Player"] = "玩家"
-L["Points for placing on each addon's board."] = "在每个插件的排行榜上获得名次的分数。"
-L["Rank"] = "排名"
-L["Recipes observed"] = "已观察配方"
-L["Share my progress"] = "共享我的进度"
-L["This week"] = "本周"
-L["Uses Forever addons"] = "使用 Forever 插件"
-L["Your guild and group"] = "你的公会和队伍"
-L["Players you've met"] = "遇到过的玩家" -- mt
-L["boards"] = "排行榜"
-L["1st"] = "第1名"
-L["2nd"] = "第2名"
-L["3rd"] = "第3名"
-L["4th"] = "第4名"
-L["5th"] = "第5名"
-L["6th"] = "第6名"
-L["7th"] = "第7名"
-L["8th"] = "第8名"
-L["board"] = "排行榜"
-L["/su leaderboard - open Forever Leaderboards on this addon's tab (also /su stats)"] =
-	"/su leaderboard - 在本插件标签页打开 Forever Leaderboards（也可用 /su stats）"
-L["total"] = "总计"
-L["On by default. Turn off to stop sending and receiving totals and hide other players. Local observations stay."] =
-	"默认开启。关闭后停止收发总数并隐藏其他玩家。本地观察记录会保留。"
 L["crafted"] = "制作" -- mt
 L["List unlearned recipes"] = "列出未学习的配方"
 L["Adds the recipes of the open profession you have not learned under an Unlearned divider, greyed and marked with a trainer or recipe item and the skill it asks. They cannot be selected or crafted."] =
@@ -492,10 +420,6 @@ L["Recipe item"] = "配方"
 L["listing unlearned recipes failed: %s"] = "列出未学习的配方失败：%s"
 L["Nothing on this route can be gathered, fished or looted by you, so the switch changes nothing for it."] =
 	"这条路线没有你可以采集、钓鱼或从生物身上拾取的东西，所以此开关不会改变什么。" -- mt
-L["On, a reagent you could gather, fish or loot from creatures is priced at a vendor or the auction house. Off, getting it yourself costs nothing."] =
-	"开启时，你可以采集、钓鱼或从生物身上拾取的素材按商人或拍卖行价格计算。关闭时，自己获取不花费任何费用。" -- mt
-L["On, a reagent you could gather, fish or loot from creatures is priced at a vendor or the auction house. Off, getting it yourself costs what it would sell for."] =
-	"开启时，你可以采集、钓鱼或从生物身上拾取的素材按商人或拍卖行价格计算。关闭时，自己获取需要按出售价值计算。" -- mt
 L["Loot %d %s from creatures"] = "从生物身上拾取 %d 个%s" -- mt
 L["you loot it from creatures"] = "你从生物身上拾取" -- mt
 L["you loot it from creatures, valued at its AH price"] = "你从生物身上拾取，按拍卖行价格计算" -- mt
@@ -512,19 +436,6 @@ L["A reagent you gather, loot or already own costs what selling it would bring -
 	"A reagent you gather, loot or already own costs what selling it would bring - its auction price after the 5% cut, or its vendor sell price if that is more - instead of counting as free. With no market price it stays unpriced rather than free. Auction prices need Auctionator/TradeSkillMaster." -- mt
 
 -- Shared debug log (Forever Core's Core/Log.lua).
-L["Debug log is off."] = "调试日志已关闭。"
-L["Debug log is on for this session."] = "本次会话已开启调试日志。"
-L["Debug log is on and pinned for this character."] = "该角色的调试日志已开启并固定。"
-L["Debug log is already on and pinned for this character."] = "该角色的调试日志已经开启并固定。"
-L["Debug log is off for this session; it is still pinned."] =
-	"本次会话已关闭调试日志，但仍保持固定。"
-L["Debug log is off and unpinned."] = "调试日志已关闭并取消固定。"
-L["No addon has attached its log yet."] = "还没有插件附加日志。"
-L["%s (last %d):"] = "%s（最近 %d 条）："
-L["%s: no lines yet."] = "%s：还没有日志行。"
-L["Usage: /forever debug, /forever debug pin, /forever debug off, /forever debug show"] =
-	"用法：/forever debug、/forever debug pin、/forever debug off、/forever debug show"
-L["This menu needs mouse and keyboard."] = "此菜单需要鼠标和键盘。"
 L["Only buffs for your level"] = "仅显示适合你等级的增益"
 L["Lists only the recipes whose product is a buff you can use at your level: elixirs, flasks, Well Fed food, protection potions, stones, oils and armour kits. Highest required level first. Learned recipes come first, then unlearned ones when those are listed."] =
 	"仅列出产物是你在当前等级可使用的增益的配方：药剂、合剂、饱食食物、防护药水、磨刀石、油和护甲套装。所需等级最高的排在最前。已学习的配方排在前，未学习的配方在列出时排在后面。"
@@ -560,5 +471,26 @@ L["TradeSkillMaster has no price for these reagents: update its AuctionDB with t
 	"TradeSkillMaster 没有这些材料的价格：使用 TSM 桌面应用更新其 AuctionDB。" -- mt
 L["Update TradeSkillMaster's AuctionDB with the TSM desktop app, or visit a vendor, to price reagents."] =
 	"使用 TSM 桌面应用更新 TradeSkillMaster 的 AuctionDB，或访问商人，为材料定价。" -- mt
-L["The tracker no longer flashes while you hover equippable items."] =
-	"将鼠标悬停在可装备物品上时，追踪器不再闪烁。" -- mt
+L["Waiting for Questie to finish loading."] = "正在等待Questie加载完毕。"
+L["Nothing is tracked for %s."] = "没有正在追踪的 %s。" -- mt
+L["+%d more to train"] = "还有 %d 项要学习" -- mt
+L["Also train"] = "还要学习" -- mt
+L["Auctionator list: %s. Open the auction house, Shopping tab, pick it and Search; buy each row with a click."] =
+	"Auctionator 列表：%s。打开拍卖行，进入“购买”标签，选择该列表并搜索；每次点击购买一行。"
+L["On (the default), a reagent you could gather, fish or loot from creatures is bought at a vendor or the auction house. Off, getting it yourself costs nothing."] =
+	"开启（默认）：你可以采集、钓鱼或从生物身上剥取的试剂会从商人或拍卖行购买。关闭：自己获取不花费任何东西。"
+L["On (the default), a reagent you could gather, fish or loot from creatures is bought at a vendor or the auction house. Off, getting it yourself costs what it would sell for."] =
+	"开启（默认）：你可以采集、钓鱼或从生物身上剥取的试剂会从商人或拍卖行购买。关闭：自己获取花费其出售价值。"
+L["Shift + wheel, or drag, scrolls the timeline sideways."] =
+	"按住 Shift 滚动滚轮，或拖动，可横向滚动时间线。"
+L["SkillUp's list"] = "SkillUp 的列表"
+L["Timeline"] = "时间线"
+L["Turning Buy reagents on writes an Auctionator list with every auction reagent still missing."] =
+	"开启“购买试剂”会写入一个 Auctionator 列表，包含所有仍缺少的拍卖行试剂。"
+L["Without Auctionator, a recipe's Search button fills the game's own auction box one reagent at a time."] =
+	"没有 Auctionator 时，配方的“搜索”按钮会一次一个试剂地填入游戏自带的拍卖搜索框。"
+L["%s: %s is out of date. Update it to fix this."] = "%s：%s 已过期。请更新它来解决此问题。" -- mt
+L["%s: %s are out of date. Update them to fix this."] = "%s：%s 已过期。请更新它们来解决此问题。" -- mt
+L["%s could not start. Reinstall %s to fix this."] = "%s 无法启动。请重新安装 %s 来解决此问题。" -- mt
+L["The skill band clears the recipe icon and the Reagents header."] =
+	"技能条不再遮挡配方图标和“材料”标题。" -- mt

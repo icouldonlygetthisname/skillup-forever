@@ -25,9 +25,9 @@ later by `retry-refresh.yml`, and one that fails again opens the issue "Data ref
 | `PT_COMMIT` | `gen_vendor.py` | last LibPeriodicTable commit that changed the Tradeskill file's bytes |
 | `CLASSICDB_COMMIT` | `gen_trainer.py` | moved by hand only: a waiver in `AGENTS.md` |
 
-`SOURCE_DATE` is set to the day a pin moved. `REVISION` in `fetch_tracker_ui.py` (the tracker UI
-shared with the other Forever addons) and the annotation revision in `typecheck.sh` are test
-inputs, moved by hand with the addons that share them.
+`SOURCE_DATE` is set to the day a pin moved. The Blizzard UI source pin in `forever_sim/fetch.py`,
+moved with forever-core, and the annotation revision in `typecheck.sh` are test inputs, moved by hand
+with the addons that share them.
 
 ## Generators
 
@@ -68,8 +68,11 @@ from the same build's `ItemSparse`) for the items in LibPeriodicTable-3.1's
 vendors sell is server data the client doesn't ship. Listed items missing from the
 build are reported and skipped; a stack count below one fails the run. It shares the build pin and cache with `gen_thresholds.py`.
 
-A recipe with no skill range in the build (`TrivialSkillLineRankHigh` not above
-`TrivialSkillLineRankLow`) never gives a skill-up and gets no row, so the addon shows `?` for it.
+A recipe with no skill range in the build (`TrivialSkillLineRankHigh` below
+`TrivialSkillLineRankLow`) never gives a skill-up and gets no row, so the addon shows `?` for it. Equal
+bounds are a real range with no yellow or green band (orange below the value, grey from it), as the
+smelting recipes have, and get a row; a profession ability or placeholder with equal bounds is not
+craftable and still gets none.
 
 `gen_recipes.py` writes `Data/Recipes.lua`, using only spell IDs already present in
 the same-build `Data/Thresholds.lua`. `ns.ProfessionSkillLines` names every profession the
@@ -108,10 +111,10 @@ taught spell's `SKILL` effect gives the skill line and the new cap), with fee,
 required skill and level. Ranks that come from books are absent (`gen_recipes.py` writes `ns.RankBooks`); a rank a
 quest teaches is in `ns.RankQuests`, from classic-db's `quest_template`, where a quest's `RewSpell` or `RewSpellCast`
 is a rank spell or learns one (Triage, Clamlette Surprise), with the quest's required skill, level and side. `ns.TrainerInferred` keeps classic-db's
-requirement for each one the range rule moved, so `/su trainers` can show which a trainer confirmed (#124).
+requirement for each one the range rule moved, so `/skillup trainers` can show which a trainer confirmed (#124).
 `SEEN_REQUIREMENTS` in `gen_trainer.py` holds requirements players saw lower in game (Bronze Warhammer at 110,
 #123): a bundled requirement above one comes down to it, and it lists in `ns.TrainerInferred` like a moved one.
-A trainer miss confirmed with `/su trainers` goes there, with its source and a test.
+A trainer miss confirmed with `/skillup trainers` goes there, with its source and a test.
 
 `gen_sources.py` writes `Data/Sources.lua`: what neither QuestieDB nor AtlasLoot holds about
 where recipes come from, from the same classic-db dump. Who sells a scroll or a reagent, the

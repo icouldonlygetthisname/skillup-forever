@@ -12,6 +12,167 @@ optional `### For addon authors` subsection after a version's player bullets.
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-11-13
+
+- **The skill band clears the recipe icon and the Reagents header.** On a recipe with no description, the bar now sits under the recipe's name, to the right of the icon, instead of covering the icon's lower half and running its "You" line into the header. Thanks to Diamondclaw and mimmordino for the report. (#674)
+- **Smelting recipes no longer show `?`.** Smelt Steel, Mithril, Truesilver, Dark Iron and Thorium have a skill range whose grey is its yellow, which SkillUp treated as contradictory and left unknown. They now show the range the game gives them, orange below the value and grey from it. Thanks to soviman1 for the report (#688).
+
+## [1.9.4] - 2026-11-12
+
+<!-- forever-core-sync -->
+
+- The Thanks page includes two more reporters: thanks to FreakinNerd for reporting that SkillUp's pages drew over the Professions window's own page, and to nookie909 for reporting that a route changed after buying its reagents. Both fixes shipped previously; this update adds their missing credits (#679).
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+
+## [1.9.3] - 2026-11-12
+
+<!-- forever-core-sync -->
+
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+
+## [1.9.2] - 2026-11-12
+
+<!-- forever-core-sync -->
+
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+- An older ForeverCore can no longer put the client's page back under SkillUp's: if another addon brings a ForeverCore from before 1.8.1, SkillUp stops and says it needs updating instead of drawing its pages over the Professions window's own page. (#658)
+
+## [1.9.1] - 2026-11-12
+
+- **SkillUp's pages no longer draw over the Professions window's own page.** 1.9.0 brought an older ForeverCore with it, which left the client's recipe list showing underneath SkillUp's route. This version carries ForeverCore 1.8.0, which hides the client's page while a SkillUp page is open and brings it back when you leave. (#658)
+
+## [1.9.0] - 2026-11-12
+
+<!-- discord-image: docs/screenshots/route-auctionator.png -->
+
+- **Opening the auction house prices your tracked routes.** With Buy reagents and reagent searching enabled, Auctionator searches missing and older reagent prices once per visit, including vendor alternatives. The route updates when those prices arrive. (#561)
+
+- **Routes keep their prices after a reload.** SkillUp asks Auctionator again after login so prices requested during the loading screen do not stay missing. Thanks to Rambomst (#655).
+
+- **Progress bars stay inside their frames.** Reagent and skill-band fills now follow the track inside the rim. Thanks to Rambomst (#656).
+
+- **Navigation:** Keep routes working with Shortest Path Forever when its shared leaderboard features are removed.
+
+- **A selected recipe shows its skill band.** The details pane now shows the bar itself as well as its container. Thanks to ItachiGrave for reporting disappearing skill information (#613).
+
+- **The Thanks page includes the Profession overlap reporters.** Thanks to bromidious for reporting the Buffs checkbox and native-control overlaps, and to .phear for independently reproducing the native-control overlap. These fixes shipped previously; this update adds their missing credits (#657).
+
+- **Searching a recipe's reagents works with Auctionator's advanced search.** The search keeps exact item names and the missing quantities. (#654)
+
+- **Native recipe descriptions stay clear.** The skill band now makes room for Blizzard's own recipe text instead of covering it. (#660)
+
+- **Local recipe observations no longer use the shared player leaderboard.** SkillUp keeps its own count and stats API while removing the unused peer-sharing setting, commands and tab integration.
+
+## [1.8.2] - 2026-11-12
+
+- **Disabled auction list maintenance stays disabled.** Turning off Auctionator's automatic search option no longer rewrites tracked shopping lists when bags or prices change. The explicit Search button still searches for the selected recipe. Thanks to kopuliak (#647).
+- **Profession tabs keep one stable custom layout.** SkillUp no longer expands the shared Professions window from recipe names, so switching between custom tabs does not move the host or leave native pages with stale width. Adaptive recipe-list sizing is deferred until it can preserve Blizzard's native page geometry.
+- **Route progress uses clean native bars.** Reagent quantities and skill bands use the approved game artwork, with labels clear of each bar (#648).
+- **Route controls keep their footer clearance.** Tracking and action controls share one baseline with space from the route panel edge (#648).
+
+## [1.8.1] - 2026-11-11
+
+<!-- forever-core-sync -->
+
+- **The Buffs tab no longer overflows the stack.** Opening it could throw a Lua stack overflow, because the scrollbar's own scroll callback wrote the new position back to the bar while it was scrolling. The bar now updates the timeline without moving itself, and its horizontal bar wears the game's own horizontal scrollbar art, so its ends and thumb are clickable. Thanks to zazomazzo (#619).
+- **A route you are shopping for stays put.** Buying its reagents, or the auction scan that comes with the purchase, no longer swaps the recipes you set out to craft: the page keeps the route you are following, with today's prices and fees against it, until you ask for a new one with the Replan button, a new target or the Buy reagents switch, or until a step of it can no longer be done (a recipe you no longer know, or a reagent that is neither in your bags nor buyable). Before, every purchase and price scan replanned the climb and could send you back to the auction house for different reagents (#621).
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+
+## [1.8.0] - 2026-11-11
+
+<!-- discord-image: docs/screenshots/route.png -->
+
+- **The Route page reads as a timeline of skill bands.** Each rank's band opens with a slim header and a progress bar, the next craft is gold, and train and buy steps are one compact gold line with a small icon. Reagent rows carry a have/need bar and a source icon, and Stop tracking is a Track checkbox (#574).
+- **The route page's Craft button says just Craft.** The step's count now sits in the game's own count box beside it, and the recipe is named on its route step and in the button's tooltip, the way the Professions window labels its own button (#564).
+- **The route page says what the whole climb costs.** A line under the skill and target shows the gold the route still needs for its reagents and fees, and what selling the crafts returns; its tooltip splits the two, and an unpriced reagent marks the total incomplete instead of quietly lowering it. The Total line at the bottom of the route is gone, so the number has one home (#567).
+- **The players who helped are on the Thanks page.** Settings, Forever addons, Thanks lists everyone whose report or idea shipped in SkillUp Forever, ranked by how much they gave. (#604)
+
+## [1.7.1] - 2026-11-11
+
+<!-- forever-core-sync -->
+
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+
+## [1.7.0] - 2026-11-11
+
+<!-- discord-image: docs/screenshots/window-wide.png -->
+
+- **The Professions window keeps one width and one page.** Switching between SkillUp's tab, another Forever addon's tab and the game's own tabs no longer leaves the other addon's page drawn over SkillUp's, and the window no longer changes width when you open another profession or tab. With the wide recipe list on, the window is as wide as the widest recipe row of every profession you have learned needs, so names stay clear of SkillUp's skill-up columns on every profession; turning it off gives the game's own width back (#555, cjber/forever-core#433).
+- **The shopping list's copy window opens without an error.** Opening it to copy your list raised a Lua error and left the list unselected. It now opens with the whole list selected, ready to copy (#622).
+- **`/skillup` is the one command.** The `/su` shortcut is gone: German and Spanish clients already bind `/su` to their own stopwatch and whisper commands, so in those languages it never reached SkillUp and ran the game's command instead. Every command works as before, typed in full: `/skillup audit`, `/skillup report`, `/skillup unskip all` and the rest.
+- Ships with the same shared code as your other Forever addons, so they keep working together.
+
+### For addon authors
+
+- **The side tab is ForeverCore's.** SkillUp registers it with `ForeverCore.ProfessionTabs.Register`, so core owns where it sits, which tab is checked and handing the window back. The wide recipe list raises the tab's one width with `ProfessionTabs.SetMinWidth`. The addon now requires the ForeverCore release with `ProfessionTabs.minor` 1.
+
+## [1.6.2] - 2026-11-11
+
+- **Tells you which addon to update.** If another Forever addon you have installed is older than this one and stops it starting, the message now names that addon, so you know exactly what to update.
+
+## [1.6.1] - 2026-11-11
+
+- **Works again after updating.** Updating to the last version could leave the addon switched off in the game's AddOns list with "ForeverCore: missing", because the update did not bring Forever Core with it. Forever Core now comes inside this addon's download again, from CurseForge, Wago or GitHub alike, so updating is all it takes (cjber/shortest-path-forever#731).
+
+- **A bolt made from gathered cloth is no longer free.** With Buy reagents off, a Bolt of Silk Cloth cost nothing because the cloth did, so recipes using bolts looked profitable. A crafted material now counts as worth at least what selling it brings, its auction price after the cut or its vendor price, whichever is higher (#598).
+
+## [1.6.0] - 2026-11-11
+
+<!-- discord-image: docs/screenshots/route.png -->
+
+- **Buy reagents is on for a new character.** Buying is nearly always the faster way to skill up, so a character with no saved choice now buys the gatherables its route needs instead of being sent to farm them. A reagent nobody has priced yet sits under Auction house as a price unknown, still on the route and still in the Auctionator list, so a search can price it. Choose gathering on the route page to go back to farming, and the checkbox's tooltip says what each choice does (#559).
+- **The Buffs timeline says that it scrolls sideways.** A thin horizontal scroll bar now sits under the timeline, in the client's own minimal style, and a soft fade marks an edge while more lies beyond it. The bar follows Shift and the wheel and follows a drag, and hovering it says so (#565).
+- **The Shopping list and the auction bar say how the Auctionator list works.** The Auction house section names the list, says to open the auction house, its Shopping tab, pick the list and Search, and that each row is one click to buy. With Buy reagents off it says turning it on writes the list, and without Auctionator it says the bar fills the game's own search box one reagent at a time. The Search button's tooltip says the same in one line (#554).
+- **The route page no longer trips over a protected button in combat.** A redraw in combat now waits with the Craft button, so the Track button, the target box, the Buy reagents switch and the Nearest vendor button change when combat ends instead of the client reporting a blocked action (#597).
+- **The "Only for level N" switch sits beside the page's title.** It is above the timeline rather than on its skill axis, so it no longer covers the tick labels at the top right (#599).
+
+### For addon authors
+
+- **`SkillUpForever.API` is listed by `ForeverCore.APIKit.Addons()` on ForeverCore 1.3.2 or later.** At load the addon hands its API table to core's suite registry, so another addon can find every Forever addon's API from one list. Publishing is not an API change, so the API's version and minor stay the same (#594).
+- **The tracker section is built with ForeverCore's `TrackerSection`.** The section no longer creates its own frame, attaches itself or keeps an anchor: `TrackerSection.Create` builds it, offers SkillUp's old tracker table once and hands layout failures to SkillUp's journal, and `TrackerLine.SetInteractive` gives the waypoint lines their mouse. The addon now requires ForeverCore 1.2.0.
+
+## [1.5.4] - 2026-11-11
+
+- **Forever Core now installs alongside it.** Forever Core is on CurseForge, so the CurseForge app installs and updates it with this addon instead of the addon carrying its own copy. On Wago, install Forever Core from its own page.
+
+## [1.5.3] - 2026-11-11
+
+- **Game data now matches Forever build 1.60.1.70888.** The recipes, trainer fees, vendor prices and skill-up thresholds were regenerated from the build the client publishes today, so a profession's route reflects what the game now says rather than last week's build.
+
+## [1.5.2] - 2026-11-11
+
+- **A profession's Shopping list shows only that profession's materials.** The button on the route page now tells the window which profession it is for, so Leatherworking's list no longer opens with a tracked Cooking plan's rows. A profession with nothing tracked says so rather than showing another profession's list (#566).
+- **The tracker says what its training count means.** `(+3 more)` is now `(+3 more to train)`, and hovering the line lists the other training stops and their skill levels under *Also train* (#557).
+
+## [1.5.1] - 2026-11-11
+
+- **The tracker's rows can be made larger from SkillUp's settings.** A new *Tracker scale* slider in *Route and trainer* scales the shared Forever tracker from 50% to 200%, so its rows can match the size you find readable; 100% is the game's own tracker. Reported on CurseForge by Chuujitsuna (#517).
+
+## [1.5.0] - 2026-11-11
+
+<!-- discord-image: docs/screenshots/shopping-list.png -->
+
+- **The addon's own icon is the same everywhere it appears in game.** The Professions side tab, the shopping windows and the leaderboard tab now all show the same scroll.
+- **The shopping list stops stacking old lines when it refreshes.** Headings, item rows and the empty message are drawn again in place instead of being added on top of the last draw, so a list that changes no longer shows two Vendor headings or text over a row. The Copy list window has its own title and opens beside the list it copies (#553).
+- **A sold out vendor item now counts as limited stock.** The vendor window showed none left and SkillUp ignored it, so an item whose stock is limited looked unlimited to the route. It now saves the sold out item as limited, keeping the highest count seen, at least one (#560).
+
+### For addon authors
+
+- **`SkillUpForever.API` is minor 6.** Other addons can read and set whether a profession is tracked, start the shopping trip, ask `Professions` for up to 25 steps and recipes, and read the recipes-observed stats and leaderboard. `SetTracked` reports whether it changed anything and never plays the checkbox sound, and a tracking change reaches subscribers on the next frame like any other answer. `docs/api.md` lists every function, the limits and the minor history.
+
+## [1.4.1] - 2026-11-10
+
+- **Needs Forever Core.** Forever Core now comes in the same download, and until Forever Core has its own CurseForge page every Forever addon's download carries a copy of it, so the addon loads with nothing else to install.
+
+### For addon authors
+
+- **`SkillUpForever.API` is minor 5.** Other addons can call `Subscribe(callback)` to hear, on the frame after a change lands and once per burst, that the levelling answers or the shopping list may have changed. A read with nothing to answer adds a `"loading"` or `"none"` reason as its second value, and `Professions()` returns a fresh table on every call, so the addon's own cache is never handed out. This needs ForeverCore 1.1.0 for its shared hub, and `docs/api.md` lists every function, the change names and the minor history.
+
+## [1.4.0] - 2026-11-10
+
+- **Needs Forever Core.** The shared tracker column, bug report and leaderboards now come from one Forever Core addon that installs with it, so every Forever addon's tracker scale, lock and position stay in step. Your tracker settings carry over.
+
+<!-- discord-image: docs/screenshots/route.png -->
 
 ## [1.3.5] - 2026-11-10
 
@@ -147,7 +308,6 @@ optional `### For addon authors` subsection after a version's player bullets.
 - **Recipes you have not learned can sit in the recipe list too.** A new setting, off by default, adds the open profession's unlearned recipes under an Unlearned divider, greyed and marked with a trainer or recipe item and the skill it asks, so what is ahead is in the same list. Unlearned rows cannot be selected or crafted. Thanks to prokn4h for the request (cjber/skillup-forever#361).
 - **Cooking routes use recipes you can buy from vendors and know when stock is limited.** A recipe sold as a scroll at a vendor is now planned like a trainer's, with the scroll's price as its fee and its required skill as where it can be learned, so a cheap vendor recipe replaces the long green stretch that used to end a route. A reagent the vendor the route sends you to stocks in a limited amount now says so, using the stock that vendor's own window shows where you have seen it and the bundled data otherwise, and its tooltip gives how many are sold at a time; a vendor seen selling unlimited stock clears a bundled limit, rather than showing a whole 280-craft route as a single purchase. (cjber/skillup-forever#358).
 
-
 ## [1.0.31] - 2026-11-07
 
 - **Meat and fish on a Cooking route count as yours to get.** Fish count as gathered when you know Fishing, and the parts creatures carry (meat, eggs, scales, feathers, venom sacs, elemental essences) count as gathered for every character, so with Buy reagents off they cost nothing and the switch no longer says it changes nothing for a Cooking route. Cloth, herbs and ore are unchanged: cloth is still bought, and herbs and ore still need the profession. A looted reagent's step reads "Loot ... from creatures" (cjber/skillup-forever#367).
@@ -226,7 +386,6 @@ optional `### For addon authors` subsection after a version's player bullets.
 - **Profession data now names the 1.60.1.70790 build.** Thresholds, recipes, vendors, trainer requirements and sources are regenerated from the new Forever client build, so every number the addon shows comes from the client you are running. The regenerated skill ranges match the previous build, so nothing a player sees changes.
 
 ## [1.0.9] - 2026-11-04
-
 
 - **Shift-clicking a recipe in the route reliably links it in chat.** The link used a compatibility function that only exists while the game's deprecation fallbacks are enabled. Without them, the click raised a Lua error. It now uses the chat frame's own link insertion.
 

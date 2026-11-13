@@ -36,6 +36,9 @@ local function Region()
 		CreateTexture = function()
 			return Region()
 		end,
+		CreateMaskTexture = function()
+			return Region()
+		end,
 	}
 	return setmetatable({ points = {}, scripts = {} }, {
 		__index = function(_, key)
@@ -101,9 +104,14 @@ local env = setmetatable({
 	ScrollUtil = { InitScrollBoxListWithScrollBar = function() end },
 	ScrollBoxConstants = { RetainScrollPosition = true },
 	HIGHLIGHT_FONT_COLOR = color,
+	NORMAL_FONT_COLOR = color,
 	GRAY_FONT_COLOR = color,
 }, { __index = _G })
-setfenv(assert(loadfile("Core/SafeCall.lua")), env)("SkillUpForever", ns)
+ns.core = {
+	SafeCall = function(_, fn, ...)
+		return pcall(fn, ...)
+	end,
+}
 setfenv(assert(loadfile("Core/Changes.lua")), env)("SkillUpForever", ns)
 setfenv(assert(loadfile("UI/List.lua")), env)("SkillUpForever", ns)
 

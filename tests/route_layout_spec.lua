@@ -23,11 +23,6 @@ end
 
 local function noop() end
 local created, insets, tabs, pageFrame = {}, {}, {}, nil
--- While the client shows a panel through its secure path, an addon's Hide is blocked; this spec counts any
--- the page still asks for there (#393).
-local inShowPath, hidesInShowPath = false, 0
--- The client hides the window through the same secure path; a Show asked for from inside it is #398.
-local inHidePath, showsInHidePath = false, 0
 
 -- Where a point sits inside a region: its own fraction of the region's width and height.
 local function Fraction(point)
@@ -106,6 +101,11 @@ end
 local function Width(region)
 	local left, _, right = Rect(region)
 	return right - left
+end
+
+local function Height(region)
+	local _, bottom, _, top = Rect(region)
+	return top - bottom
 end
 
 -- Two rects intersect when they overlap on both axes; touching edges do not count.
@@ -195,6 +195,15 @@ local function NewRegion(parent, frameType)
 	function region:SetText(text)
 		self.text = text
 	end
+	function region:SetAtlas(atlas)
+		self.atlas = atlas
+	end
+	function region:SetTexture(texture)
+		self.texture = texture
+	end
+	function region:SetFormattedText(format, ...)
+		self.text = string.format(format, ...)
+	end
 	function region:GetTextWidth()
 		return TextWidth(self.text or "")
 	end
@@ -208,18 +217,12 @@ local function NewRegion(parent, frameType)
 		self.shown = shown and true or false
 	end
 	function region:Show()
-		if inHidePath and not self.ignoreHides then
-			showsInHidePath = showsInHidePath + 1
-		end
 		self.shown = true
 		if self.scripts.OnShow then
 			self.scripts.OnShow(self)
 		end
 	end
 	function region:Hide()
-		if inShowPath and not self.ignoreHides then
-			hidesInShowPath = hidesInShowPath + 1
-		end
 		self.shown = false
 		if self.scripts.OnHide then
 			self.scripts.OnHide(self)
@@ -233,6 +236,9 @@ local function NewRegion(parent, frameType)
 	end
 	function region:SetEnabled(enabled)
 		self.enabled = enabled and true or false
+	end
+	function region:EnableMouse(enabled)
+		self.mouseEnabled = enabled and true or false
 	end
 	function region:IsEnabled()
 		return self.enabled
@@ -282,6 +288,21 @@ local function NewRegion(parent, frameType)
 		local texture = NewRegion(self, "Texture")
 		created[#created + 1] = texture
 		return texture
+	end
+	function region:CreateMaskTexture()
+		local mask = NewRegion(self, "MaskTexture")
+		created[#created + 1] = mask
+		return mask
+	end
+	function region:AddMaskTexture(mask)
+		self.masks = self.masks or {}
+		self.masks[#self.masks + 1] = mask
+	end
+	function region:SetStatusBarTexture(texture)
+		self.statusBarTexture = texture
+	end
+	function region:GetStatusBarTexture()
+		return self.statusBarTexture
 	end
 	function region:SetCustomOnMouseUpHandler(fn)
 		self.scripts.OnMouseUp = fn
@@ -352,7 +373,7 @@ titleBar:SetPoint("TOPLEFT", 0, 0)
 titleBar:SetPoint("TOPRIGHT", 0, 0)
 titleBar:SetHeight(21)
 
-local function CreateFrame(frameType, _, parent, template)
+local function CreateFrame(frameType, name, parent, template)
 	local region = NewRegion(parent, frameType)
 	region.template = template
 	if template == "LargeSideTabButtonTemplate" then
@@ -365,10 +386,48 @@ local function CreateFrame(frameType, _, parent, template)
 		insets[#insets + 1] = region
 	elseif template == "UICheckButtonTemplate" then
 		region.width, region.height = 26, 26
-	elseif parent == ProfessionsFrame and template == nil then
+	elseif template == "NumericInputSpinnerTemplate" then
+		region.IncrementButton = NewRegion(region, "Button")
+		region.DecrementButton = NewRegion(region, "Button")
+		region.MouseWheelCatcher = NewRegion(region, "Frame")
+	elseif parent == ProfessionsFrame and template == nil and name == nil then
 		pageFrame = region
 	end
 	return region
+end
+
+-- ForeverCore.ProfessionTabs, as the shared module drives it: one tab and the page core shows. This spec is
+-- about SkillUp's pages, so core's own placement and hand-back are its own tests; here selecting and handing
+-- back do what core does. Its minor is 2, the version Core/Require.lua asks for.
+local coreTab, coreEntry, coreSelected
+local ProfessionTabs = { minor = 2 }
+function ProfessionTabs.Register(key, spec)
+	coreEntry = { key = key, spec = spec }
+	coreTab = CreateFrame("Button", nil, ProfessionsFrame, "LargeSideTabButtonTemplate")
+	coreTab.Icon:SetTexture(spec.icon)
+	coreTab.tooltipText = spec.tooltip
+	coreTab:SetCustomOnMouseUpHandler(function(_, button, upInside)
+		if button == "LeftButton" and upInside then
+			ProfessionTabs.Select(key)
+		end
+	end)
+	return coreTab
+end
+function ProfessionTabs.Select()
+	coreSelected = coreEntry.key
+	coreTab:SetChecked(true)
+	coreEntry.spec.page:Show()
+	if coreEntry.spec.onSelect then
+		coreEntry.spec.onSelect(coreEntry.key)
+	end
+end
+function ProfessionTabs.ShowNative()
+	coreSelected = nil
+	coreTab:SetChecked(false)
+	coreEntry.spec.page:Hide()
+end
+function ProfessionTabs.Selected()
+	return coreSelected
 end
 
 -- The scroll box list, as this spec needs it: the view draws a frame for an element through its element
@@ -427,17 +486,20 @@ local reagents = {
 	{ itemID = 2, need = 20, source = "vendor" },
 	{ itemID = 3, need = 10, source = "vendor" },
 }
+local apprentice = { name = "Apprentice", from = 0, cap = 75 }
+local craftStep = { recipeID = 3275, crafts = 5, from = 1, to = 5, color = "green" }
 local plan = {
 	target = 100,
-	crafts = { { recipeID = 3275, crafts = 5, from = 1, to = 5, color = "green" } },
+	crafts = { craftStep },
 	steps = {
 		-- The sub-craft that makes the craft's reagent, as its own row before the craft.
-		{ subcraft = { recipeID = 3276, itemID = 2, crafts = 5, made = 5 } },
-		{ craft = { recipeID = 3275, crafts = 5, from = 1, to = 5, color = "green" } },
+		{ band = apprentice, subcraft = { recipeID = 3276, itemID = 2, crafts = 5, made = 5 } },
+		{ band = apprentice, craft = craftStep },
 	},
 	ranks = {},
 	cost = 0,
 	unpriced = 0,
+	bands = { apprentice },
 }
 
 local function FirstAid(skill)
@@ -625,6 +687,7 @@ function ns.CanGather(itemID)
 end
 
 local env = setmetatable({
+	ForeverCore = { ProfessionTabs = ProfessionTabs },
 	-- SafeCall hands a caught error to the game's handler: here it fails the spec.
 	geterrorhandler = function()
 		return function(message)
@@ -633,6 +696,15 @@ local env = setmetatable({
 		end
 	end,
 	CreateFrame = CreateFrame,
+	C_Texture = {
+		GetAtlasInfo = function(atlas)
+			-- The band's bar frame is its own wide art; every other atlas in this spec is square.
+			if atlas == "Professions-skillbar-frame" then
+				return { width = 451, height = 29 }
+			end
+			return { width = 32, height = 32 }
+		end,
+	},
 	C_Timer = {
 		After = function(_, fn)
 			timers[#timers + 1] = fn
@@ -693,6 +765,7 @@ local env = setmetatable({
 	HIGHLIGHT_FONT_COLOR = Color(),
 	GRAY_FONT_COLOR = Color(),
 	RED_FONT_COLOR = Color(),
+	CreateColor = Color,
 	CreateScrollBoxListLinearView = CreateScrollBoxListLinearView,
 	CreateDataProvider = function(elements)
 		return { elements = elements }
@@ -714,15 +787,20 @@ local env = setmetatable({
 	end,
 })
 
+ns.core = {
+	SafeCall = function(_, fn, ...)
+		return pcall(fn, ...)
+	end,
+}
 for _, file in ipairs({
 	"Locales/enUS.lua",
 	"Data/Thresholds.lua",
 	"Data/Recipes.lua",
 	"Data/Trainer.lua",
 	"Core/Model.lua",
-	"Core/SafeCall.lua",
 	"Core/Changes.lua",
 	"Core/Plan.lua",
+	"UI/Art.lua",
 	"UI/List.lua",
 	"UI/PageParts.lua",
 	"UI/Pages.lua",
@@ -802,72 +880,21 @@ local page = pageFrame
 ns.db.showGearTab = true
 ns.AttachGear()
 
--- One SkillUp side tab, whatever its pages: a tab another addon hangs under ours is never the slot ours go
--- under, or the client refuses the anchor and the tab loses its place.
-local function Below(lower, upper)
-	local anchor = lower.points[1]
-	return #lower.points == 1 and anchor.relative == upper and anchor.relativePoint == "BOTTOMLEFT"
-end
-local function OpenWindow()
-	local ok, err = pcall(ProfessionsFrame.scripts.OnShow, ProfessionsFrame)
-	equal(ok, true, "the window opens without an anchor error: " .. tostring(err))
-end
-OpenWindow()
-equal(#tabs, 1, "the pages share one side tab")
-equal(Below(tab, ProfessionsFrame.ProfessionsOverviewTab), true, "the SkillUp tab sits under Blizzard's column")
--- What's Training? pins its own tab to the window's bottom-right corner: a BOTTOMLEFT of the window's
--- BOTTOMRIGHT at 0,10, which is flush with the column's left edge but sits down by the window's bottom
--- (Crafting/Crafting.lua). It can appear or re-place itself after our tab is already laid out, so a tab
--- switch (the same placement pass our events run) must leave ours in the free slot above it, inside the
--- window (#446).
-do
-	local cornerTab = NewRegion(ProfessionsFrame)
-	cornerTab:SetPoint("BOTTOMLEFT", ProfessionsFrame, "BOTTOMRIGHT", 0, 10)
-	cornerTab:SetSize(43, 55)
-	local hangingTab = NewRegion(ProfessionsFrame)
-	hangingTab:SetPoint("TOPLEFT", tab, "BOTTOMLEFT", 0, -2)
-	hangingTab:SetSize(43, 55)
-	ns.PlaceSideTabs()
-	equal(Below(tab, ProfessionsFrame.ProfessionsOverviewTab), true, "the SkillUp tab keeps the first free slot")
-	equal(Below(tab, cornerTab), false, "and is not pushed under What's Training?'s corner tab")
-	local _, bottom, _, top = Rect(tab)
-	local _, windowBottom, _, windowTop = Rect(ProfessionsFrame)
-	equal(bottom > windowBottom and top < windowTop, true, "the SkillUp tab stays beside the window")
-	-- The tab stays while any page is on, and goes with the last one; with one back on it returns to the
-	-- first free slot.
-	ns.db.showRouteTab = false
-	ns.Changed("settings")
-	equal(tab.shown, true, "the tab stays while the gear page is on")
-	equal(Below(tab, ProfessionsFrame.ProfessionsOverviewTab), true, "in the first free slot")
-	ns.db.showGearTab = false
-	ns.Changed("settings")
-	equal(tab.shown, false, "the tab is hidden when every page is off")
-	ns.db.showRouteTab = true
-	ns.Changed("settings")
-	equal(Below(tab, ProfessionsFrame.ProfessionsOverviewTab), true, "and comes back in the first free slot")
-	cornerTab:Hide()
-	hangingTab:Hide()
-end
-OpenWindow()
--- All The Things on Forever keeps the column's tabs in one full-height frame on the window's right edge and
--- anchors its own tab in the next free slot inside it (#402). That frame is the column, not the lowest tab:
--- the SkillUp tab goes under the tab in it, beside the window, not under the window's bottom.
-local sidebar = NewRegion(ProfessionsFrame)
-sidebar:SetPoint("TOPLEFT", ProfessionsFrame, "TOPRIGHT", 0, 0)
-sidebar:SetPoint("BOTTOMLEFT", ProfessionsFrame, "BOTTOMRIGHT", 0, 0)
-sidebar:SetWidth(1)
-local thirdPartyTab = NewRegion(sidebar)
-thirdPartyTab:SetPoint("TOPLEFT", ProfessionsFrame.ProfessionsOverviewTab, "BOTTOMLEFT", 0, -2)
-thirdPartyTab:SetSize(43, 55)
-OpenWindow()
-equal(Below(tab, thirdPartyTab), true, "the SkillUp tab goes under a third-party tab inside the column frame")
-equal(Below(tab, sidebar), false, "the column frame itself is never the slot the tab hangs under")
-local _, tabBottom, _, tabTop = Rect(tab)
-local _, windowBottom, _, windowTop = Rect(ProfessionsFrame)
-equal(tabBottom > windowBottom and tabTop < windowTop, true, "and the SkillUp tab stays beside the window")
-thirdPartyTab:Hide()
-sidebar:Hide()
-OpenWindow()
+-- One SkillUp side tab, whatever its pages, and it is the one core registered.
+equal(#tabs, 1, "the pages share core's one side tab")
+equal(tab, coreTab, "the side tab is the one core registered")
+equal(tab.tooltipText, "SkillUp", "it says SkillUp")
+equal(coreEntry.spec.minWidth, nil, "no recipe list here means no width of its own")
+-- The tab stays while any page is on, and goes with the last one.
+ns.db.showRouteTab = false
+ns.Changed("settings")
+equal(tab.shown, true, "the tab stays while the gear page is on")
+ns.db.showGearTab = false
+ns.Changed("settings")
+equal(tab.shown, false, "the tab is hidden when every page is off")
+ns.db.showRouteTab = true
+ns.Changed("settings")
+equal(tab.shown, true, "and comes back with one page on")
 
 tab.scripts.OnMouseUp(nil, "LeftButton", true)
 Flush()
@@ -894,16 +921,34 @@ for _, heading in ipairs(headings) do
 	equal(overlaps(heading, ProfessionsFrame.portrait), false, heading.text .. " misses the portrait")
 end
 
--- The switch and its label are one control in the header; Track, Craft and the vendor button share
--- the bottom row, right to left, with the craft label at its widest so no length can overlap.
+-- The switch and its label are one control in the header; the Track checkbox, the Replan button, Craft, the count
+-- box and the vendor button share the bottom row, right to left, at their one fixed width each.
 local controls = {
+	page.Skill,
+	page.Target,
 	page.Collect,
 	page.CollectLabel,
+	page.Money,
 	page.Vendor,
 	page.Craft,
+	page.CraftCount,
 	page.Track,
+	page.TrackLabel,
+	page.Replan,
 }
-local names = { "the switch", "the switch's label", "the vendor button", "Craft", "Track" }
+local names = {
+	"the skill line",
+	"the target box",
+	"the switch",
+	"the switch's label",
+	"the money line",
+	"the vendor button",
+	"Craft",
+	"Craft's count",
+	"Track",
+	"Track's label",
+	"Replan",
+}
 
 for index, control in ipairs(controls) do
 	for _, heading in ipairs(headings) do
@@ -914,6 +959,19 @@ for index, control in ipairs(controls) do
 	equal(top < pageT and bottom > pageB, true, names[index] .. " sits inside the page's height")
 	equal(overlaps(control, titleBar), false, names[index] .. " misses the title bar")
 	equal(overlaps(control, ProfessionsFrame.portrait), false, names[index] .. " misses the portrait")
+end
+
+-- Long translated header labels still get a bounded rank column. This is the cooking 95/150 to target 150 shape
+-- from the reported overlap: the rank line may be clipped by its own column, but never paints through its controls.
+page.Skill:SetText("Kompetenz 95/150 Ziel")
+page.CollectLabel:SetText("Materialien im Auktionshaus kaufen")
+ns.Changed("settings")
+for _, control in ipairs({ page.Skill, page.Target, page.Collect, page.CollectLabel }) do
+	for _, other in ipairs({ page.Skill, page.Target, page.Collect, page.CollectLabel }) do
+		if control ~= other then
+			equal(overlaps(control, other), false, "translated header controls do not overlap")
+		end
+	end
 end
 for index, control in ipairs(controls) do
 	equal(Width(control) > 0, true, names[index] .. " has a width to overlap with")
@@ -929,16 +987,57 @@ local switchAnchor = page.Collect.points[1]
 equal(switchAnchor.relative, page.Target, "the switch hangs off the target it changes")
 equal(switchAnchor.relativePoint, "RIGHT", "at the target's right, in the header")
 local vendorAnchor = page.Vendor.points[1]
-equal(vendorAnchor.relative, page.Craft, "the vendor button hangs off the craft it sits beside")
-equal(vendorAnchor.relativePoint, "LEFT", "at the craft's left, in the bottom row")
+equal(vendorAnchor.relative, page.CraftCount, "the vendor button hangs off the count it sits beside")
+equal(vendorAnchor.relativePoint, "LEFT", "at the count's left, in the bottom row")
+local countAnchor = page.CraftCount.points[1]
+equal(countAnchor.relative, page.Craft, "the count hangs off the craft button")
+equal(countAnchor.relativePoint, "LEFT", "at the craft's left, in the bottom row")
 local craftAnchor = page.Craft.points[1]
-equal(craftAnchor.relative, page.Track, "the craft button hangs off the track button")
-equal(craftAnchor.relativePoint, "LEFT", "at the track's left, in the bottom row")
-equal(Width(page.Craft), 240, "the craft button is drawn at its widest label")
+equal(craftAnchor.relative, insets[2], "the craft button ends the bottom row at the reagents' edge")
+equal(craftAnchor.relativePoint, "BOTTOMRIGHT", "where the actions start from")
+local trackLabelAnchor = page.TrackLabel.points[1]
+equal(trackLabelAnchor.relative, page.Track, "the track label sits at the checkbox's right")
+equal(trackLabelAnchor.relativePoint, "RIGHT", "so the checkbox keeps the row's left edge")
+local trackAnchor = page.Track.points[1]
+equal(trackAnchor.relative, insets[1], "and the checkbox sits at the route's bottom left")
+equal(trackAnchor.relativePoint, "BOTTOMLEFT", "where the row starts")
+local replanAnchor = page.Replan.points[1]
+equal(replanAnchor.relative, page.TrackLabel, "Replan sits after the Track label")
+equal(replanAnchor.relativePoint, "RIGHT", "in the bottom row's free space")
+
+-- The footer is below the insets, not pressed against their lower art seam. Keep a real gap after the Track
+-- checkbox and between its translated label and Replan, even when the host is at its fixed 673 px width.
+local _, _, trackRight, trackTop = Rect(page.Track)
+local labelLeft, _, labelRight, _ = Rect(page.TrackLabel)
+local replanLeft, _, replanRight, replanTop = Rect(page.Replan)
+local _, routeBoxBottom = Rect(insets[1])
+equal(labelLeft - trackRight >= 4, true, "Track label has clearance from its checkbox")
+equal(replanLeft - labelRight >= 20, true, "Replan has clearance from the Track label")
+equal(trackTop < routeBoxBottom - 4, true, "Track clears the route inset seam")
+equal(replanTop < routeBoxBottom - 4, true, "Replan clears the route inset seam")
+equal(replanRight <= pageR, true, "Replan stays inside the host footer")
+local _, trackFooterBottom, _, trackFooterTop = Rect(page.Track)
+local _, craftFooterBottom, _, craftFooterTop = Rect(page.Craft)
+equal(
+	math.abs((trackFooterBottom + trackFooterTop) / 2 - (craftFooterBottom + craftFooterTop) / 2) < 1e-6,
+	true,
+	"footer controls share one baseline"
+)
+equal(routeBoxBottom - trackFooterTop >= 8, true, "Track clears the inset seam by 8 px")
+local _, footerPageBottom = Rect(page)
+equal(trackFooterBottom - footerPageBottom >= 8, true, "footer keeps host bottom clearance")
+equal(Width(page.Replan), 80, "at its one fixed width")
+equal(Width(page.Craft), 100, "the craft button keeps one width")
+equal(Width(page.CraftCount), 62, "and the count box keeps its own")
+equal(page.CraftCount.template, "NumericInputSpinnerTemplate", "the count uses the game's spinner count box")
+equal(page.CraftCount.IncrementButton.shown, false, "with its up arrow hidden")
+equal(page.CraftCount.DecrementButton.shown, false, "and its down arrow hidden")
+equal(page.CraftCount.MouseWheelCatcher.mouseEnabled, false, "and no wheel capture")
+equal(page.Track.checked, false, "the Track checkbox shows an untracked route")
 
 -- The list's scroll box is what the addon places; the game lays the rows out inside it, so the scroll
 -- box must sit inside the inset and every row the game draws inside the scroll box.
-local routeLeft, routeBoxBottom, routeRight, routeTop = Rect(insets[1])
+local routeLeft, _, routeRight, routeTop = Rect(insets[1])
 local boxLeft, boxBottom, boxRight, boxTop = Rect(page.RouteList.scrollBox)
 equal(boxLeft >= routeLeft and boxRight <= routeRight, true, "the route list's scroll box is inside its inset")
 equal(boxTop <= routeTop and boxBottom >= routeBoxBottom, true, "and inside its height")
@@ -958,6 +1057,53 @@ for _, row in ipairs(page.RouteList.scrollBox.frames) do
 	end
 end
 equal(routeRows, 2, "the route list draws the sub-craft and the craft as rows")
+
+-- Skill bands use the same approved clean progress assets as reagent counts.
+local bands = 0
+for _, row in ipairs(page.RouteList.scrollBox.frames) do
+	if row.kind == "band" then
+		bands = bands + 1
+		equal(row.BarBg.atlas, "common-stat-bar-BG", "a band draws the native clean bar background")
+		equal(row.BarFill.atlas, "common-stat-bar-white", "a band draws the native clean bar fill")
+		equal(Height(row.BarBg), 29, "at the native background height")
+		equal(Height(row.BarFill), 15, "at the native fill height")
+		equal(Width(row.BarBg), 170, "inside the band's bar width")
+		-- The client's ColoredProgressBarTemplate keeps its fill 6 inside the frame's rim and masks it to the
+		-- track; a fill flush with the frame draws over the rim.
+		local frameLeft, frameBottom, frameRight, frameTop = Rect(row.BarBg)
+		equal(Rect(row.BarFill) - frameLeft, 6, "a band's fill starts inside the frame's rim")
+		local done, span = row.BarText.text:match("^(%d+)/(%d+)$")
+		local fraction = math.min(tonumber(done) / tonumber(span), 1)
+		equal(
+			math.abs(Width(row.BarFill) - (Width(row.BarBg) - 12) * fraction) < 1e-9,
+			true,
+			"and fills only the track inside the rim"
+		)
+		local maskLeft, maskBottom, maskRight, maskTop = Rect(row.BarMask)
+		equal(
+			maskLeft == frameLeft and maskRight == frameRight and maskBottom == frameBottom and maskTop == frameTop,
+			true,
+			"a mask covers the band's frame"
+		)
+		equal(row.BarMask.atlas, "common-stat-bar-Mask", "the client's own bar mask")
+		equal(row.BarFill.masks and row.BarFill.masks[1], row.BarMask, "shapes the band's fill to the track")
+	end
+end
+equal(bands, 1, "the route draws its skill band's header")
+local currentRow
+for _, row in ipairs(page.RouteList.scrollBox.frames) do
+	if row.current then
+		currentRow = row
+	end
+end
+equal(currentRow and currentRow.Text.text, "Spell 3275", "the next craft is marked as the current step")
+equal(
+	currentRow and currentRow.Current:IsShown(),
+	true,
+	"with the client's gold highlight over the row, not a recoloured name"
+)
+equal(Find("Apprentice") ~= nil, true, "the route opens with its skill band header")
+equal(Find("0 to 75") ~= nil, true, "with the band's range beside it")
 equal(Find("Craft 5× Spell 3276") ~= nil, true, "the sub-craft names itself as a craft")
 equal(Find("makes 5 Coarse Thread") ~= nil, true, "and says how much of the reagent it makes")
 
@@ -979,7 +1125,33 @@ for _, row in ipairs(page.ReagentList.scrollBox.frames) do
 		equal(Width(row.Icon) >= 36, true, "a reagent row's icon is a full item icon")
 		equal(left >= reagentLeft and right <= reagentRight, true, "the reagent row is inside its inset's width")
 		equal(top <= reagentTop and bottom >= reagentBottom, true, "and inside its height")
-		equal(Width(row.Text), 183.5, "a reagent row gives its name the width the row has")
+		equal(
+			Width(row.Text),
+			row.entry.sourceIcon and 163.5 or 183.5,
+			"a reagent row gives its name the room beside its source icon"
+		)
+		local _, barBottom, _, barTop = Rect(row.BarBg)
+		local _, fillBottom, _, fillTop = Rect(row.Bar)
+		local _, nameBottom = Rect(row.Text)
+		local _, detailBottom, _, detailTop = Rect(row.Detail)
+		equal(Height(row.BarBg), 29, "reagent background keeps native height")
+		equal(Height(row.Bar), 15, "reagent fill keeps native height")
+		local frameLeft, _, frameRight = Rect(row.BarBg)
+		local fillLeft, _, fillRight = Rect(row.Bar)
+		equal(fillLeft - frameLeft, 6, "a reagent fill starts inside the frame's rim")
+		equal(frameRight - fillRight, 6, "and a full one ends inside it")
+		equal(row.Bar:GetStatusBarTexture().masks[1], row.BarMask, "the frame's mask shapes the reagent fill")
+		equal(row.BarMask.atlas, "common-stat-bar-Mask", "with the client's own bar mask")
+		equal(fillBottom >= barBottom and fillTop <= barTop, true, "fill stays inside its background")
+		equal(nameBottom - barTop >= 3, true, "bar clears the item name")
+		equal(barBottom - detailTop >= 3, true, "bar clears the source label")
+		equal(
+			detailBottom >= bottom,
+			true,
+			("source label stays inside its row (%s >= %s)"):format(detailBottom, bottom)
+		)
+		equal(row.barNeed, row.entry.bar.need, "a reagent row carries its have/need bar")
+		equal(row.Source.shown, row.entry.sourceIcon ~= nil, "and a source icon where the source has one")
 	end
 end
 equal(reagentRows, 3, "the reagent list draws a row a reagent")
@@ -1106,77 +1278,24 @@ equal(routePage:IsShown(), true, "a second route click shows the route page agai
 equal(gearPage:IsShown(), false, "and still hides the gear page")
 equal(routeTab.checked, true, "with the side tab checked")
 
--- Other addons dismiss their custom pages when the native crafting page shows.
-local foreignPage = NewRegion(ProfessionsFrame)
-ProfessionsFrame.CraftingPage:HookScript("OnShow", function()
-	foreignPage:Hide()
-end)
-for _, target in ipairs({
-	{ button = routeBottom, page = routePage, other = gearPage, name = "route" },
-	{ button = gearTab, page = gearPage, other = routePage, name = "gear" },
-}) do
-	ProfessionsFrame.CraftingPage:Hide()
-	foreignPage:Show()
-	target.button.scripts.OnClick()
-	Flush()
-	equal(foreignPage:IsShown(), false, target.name .. " dismisses another addon's page")
-	equal(target.page:IsShown(), true, target.name .. " stays visible after the native handoff")
-	equal(target.other:IsShown(), false, target.name .. " hides the other SkillUp page")
-	equal(routeTab.checked, true, target.name .. " keeps the side tab checked after the native handoff")
-	equal(ProfessionsFrame.CraftingPage:IsShown(), false, target.name .. " leaves the native page hidden")
-end
-
--- Blizzard's own tabs hand the window back through their page showing.
-ProfessionsFrame.BookPage:Show()
+-- ForeverCore hands the window back when the player picks a client tab or page: core hides SkillUp's page and
+-- unchecks the side tab. The client's own page is never hidden by this addon.
+ProfessionTabs.ShowNative()
 Flush()
-equal(routePage:IsShown(), false, "the overview hides the route page")
+equal(routePage:IsShown(), false, "a client tab hides the route page")
 equal(gearPage:IsShown(), false, "and the gear page")
 equal(routeTab.checked, false, "the side tab unchecks")
-ProfessionsFrame.CraftingPage:Show()
-Flush()
-equal(routePage:IsShown(), false, "a profession page hides the route page")
-equal(gearPage:IsShown(), false, "and the gear page")
+equal(ProfessionsFrame.CraftingPage:IsShown(), true, "and the client's own page stays shown")
 
--- #393: the client shows the Professions window through its secure panel path (SetAttribute, ShowUIPanel,
--- SetUIPanel, Show), where a Hide from addon code is blocked. The route tab is selected, and the window then
--- shows its native pages: no Hide may run until the deferred pass, and that pass keeps the route page shown.
+-- Closing the window hands it back the same way.
 routeBottom.scripts.OnClick()
 Flush()
-equal(routePage:IsShown(), true, "the route page is showing before the window opens")
--- The foreign page's hook above is another addon's work, not this one's.
-foreignPage.ignoreHides = true
-hidesInShowPath = 0
-inShowPath = true
-local ok, err = pcall(function()
-	ProfessionsFrame:Show()
-	ProfessionsFrame.CraftingPage:Show()
-	ProfessionsFrame.BookPage:Show()
-end)
-inShowPath = false
-equal(ok, true, "the window opens without a blocked Hide: " .. tostring(err))
-equal(hidesInShowPath, 0, "opening the window hides no frame from inside the show path")
+equal(routePage:IsShown(), true, "the route page shows before the window closes")
+ProfessionsFrame:Hide()
 Flush()
-equal(routePage:IsShown(), true, "the deferred pass leaves the route page shown")
-equal(ProfessionsFrame.CraftingPage:IsShown(), false, "and hides the native crafting page")
-equal(ProfessionsFrame.BookPage:IsShown(), false, "and the book page")
-equal(routeTab.checked, true, "and keeps the side tab checked")
-
--- #398: the client hides the window through the same secure panel path, where showing a Blizzard page from
--- addon code is blocked. The route page is showing, and the window closes: no Show may run until the deferred
--- pass, and that pass returns the window to its crafting page.
-equal(routePage:IsShown(), true, "the route page is showing before the window closes")
-showsInHidePath = 0
-inHidePath = true
-local hideOk, hideErr = pcall(function()
-	ProfessionsFrame:Hide()
-end)
-inHidePath = false
-equal(hideOk, true, "the window closes without a blocked Show: " .. tostring(hideErr))
-equal(showsInHidePath, 0, "closing the window shows no frame from inside the hide path")
-Flush()
-equal(ProfessionsFrame.CraftingPage:IsShown(), true, "the deferred pass returns the window to the crafting page")
-equal(ProfessionsFrame:IsShown(), false, "while the window stays closed")
+equal(routePage:IsShown(), false, "closing the window hides the route page")
 equal(routeTab.checked, false, "and unchecks the side tab")
+ProfessionsFrame:Show()
 
 -- #398: under the gamepad interface, opening the Professions window runs SmartNavigation's panel scan
 -- (Blizzard_GamepadSmartNavigation, FindButtons and SmartNavigation_CanFocusFrame at Forever 1.60.1). For a
