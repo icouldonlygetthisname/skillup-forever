@@ -4,7 +4,7 @@ Fork of [cjber/skillup-forever](https://github.com/cjber/skillup-forever) (GPL-3
 
 ## Current state
 
-No local fixes. `main` is `upstream/main` plus this file, and the game runs the plain CurseForge release, with auto-update on.
+No local fixes. `main` is upstream tag `v1.9.5` plus this file (synced 2026-11-13), and the game runs the plain CurseForge v1.9.5 release, with auto-update on.
 
 ## If a fix is needed again
 
